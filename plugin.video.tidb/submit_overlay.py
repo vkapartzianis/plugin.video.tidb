@@ -44,7 +44,7 @@ class SubmitMarkOverlay(xbmcgui.WindowXMLDialog):
     def __new__(cls, xml_file: str, addon_path: str, skin: str, res: str,
                 label_text: str = '', player: Optional[xbmc.Player] = None,
                 monitor: Optional[xbmc.Monitor] = None) -> 'SubmitMarkOverlay':
-        return super(SubmitMarkOverlay, cls).__new__(cls)
+        return super(SubmitMarkOverlay, cls).__new__(cls, xml_file, addon_path, skin, res)  # type: ignore[call-arg]
 
     def __init__(self, xml_file: str, addon_path: str, skin: str, res: str,
                  label_text: str = '', player: Optional[xbmc.Player] = None,

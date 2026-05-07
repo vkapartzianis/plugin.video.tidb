@@ -15,6 +15,8 @@ class TIDBPlayer(xbmc.Player):
         self._filename: Optional[str] = None
         self._is_tv: bool = False
         self._is_video: bool = False
+        self._is_paused: bool = False
+        self._pause_count: int = 0
 
     @property
     def playback_started(self) -> bool:
@@ -31,6 +33,14 @@ class TIDBPlayer(xbmc.Player):
     @property
     def is_video(self) -> bool:
         return self._is_video
+
+    @property
+    def is_paused(self) -> bool:
+        return self._is_paused
+
+    @property
+    def pause_count(self) -> int:
+        return self._pause_count
 
     def onAVStarted(self) -> None:
         self._playback_started = True
@@ -53,12 +63,22 @@ class TIDBPlayer(xbmc.Player):
     def onPlayBackError(self) -> None:
         self._reset()
 
+    def onPlayBackPaused(self) -> None:
+        self._is_paused = True
+        self._pause_count += 1
+        xbmc.log('[TheIntroDB] Playback paused (count={})'.format(self._pause_count), xbmc.LOGINFO)
+
+    def onPlayBackResumed(self) -> None:
+        self._is_paused = False
+
     def _reset(self) -> None:
         xbmc.log('[TheIntroDB] Playback ended/stopped', xbmc.LOGINFO)
         self._playback_started = False
         self._filename = None
         self._is_tv = False
         self._is_video = False
+        self._is_paused = False
+        self._pause_count = 0
 
     def _check_is_video(self) -> bool:
         try:

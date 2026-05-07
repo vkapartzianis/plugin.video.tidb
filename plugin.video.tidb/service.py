@@ -62,7 +62,7 @@ class PlaybackSession:
     submit_start_sec: Optional[float]
     submit_prompted_this_pause: bool
     submit_done_for_file: bool
-    was_paused_last_tick: bool
+    last_seen_pause_count: int
 
     def __init__(self) -> None:
         self.reset()
@@ -78,7 +78,7 @@ class PlaybackSession:
         self.submit_start_sec = None
         self.submit_prompted_this_pause = False
         self.submit_done_for_file = False
-        self.was_paused_last_tick = False
+        self.last_seen_pause_count = 0
 
 
 # ── Segment collection ────────────────────────────────────────────────────
@@ -238,12 +238,13 @@ def _handle_submit_tick(session: PlaybackSession, player: TIDBPlayer, monitor: x
 
     Mutates session in place. Returns True if the segment cache should be invalidated.
     """
-    is_paused = xbmc.getCondVisibility('Player.Paused')
+    is_paused = player.is_paused
+    current_pause_count = player.pause_count
 
-    # Detect fresh pause edge
-    if is_paused and not session.was_paused_last_tick:
+    # Detect fresh pause edge via callback-driven counter
+    if current_pause_count > session.last_seen_pause_count:
         session.submit_prompted_this_pause = False
-    session.was_paused_last_tick = is_paused
+        session.last_seen_pause_count = current_pause_count
 
     if not _should_offer_submit(session, is_paused, all_segments):
         return False
@@ -254,8 +255,11 @@ def _handle_submit_tick(session: PlaybackSession, player: TIDBPlayer, monitor: x
         return False
 
     if current_time > SUBMIT_WINDOW_SECS:
+        xbmc.log('[TheIntroDB] Submit blocked: past {:.0f}s window (at {:.1f}s)'.format(
+            SUBMIT_WINDOW_SECS, current_time), xbmc.LOGINFO)
         return False
 
+    xbmc.log('[TheIntroDB] Submit flow active at {:.1f}s'.format(current_time), xbmc.LOGINFO)
     session.submit_prompted_this_pause = True
 
     if session.submit_start_sec is None:
@@ -271,17 +275,30 @@ def _handle_submit_tick(session: PlaybackSession, player: TIDBPlayer, monitor: x
 def _should_offer_submit(session: PlaybackSession, is_paused: bool, all_segments: Dict[str, Any]) -> bool:
     """Guard: all preconditions for showing the submit prompt."""
     if not _fresh_bool('enable_submissions'):
+        if is_paused and not session.submit_prompted_this_pause:
+            xbmc.log('[TheIntroDB] Submit blocked: enable_submissions is off', xbmc.LOGINFO)
         return False
-    if not bool((ADDON.getSetting('introdb_api_key') or '').strip()):
+    try:
+        api_key = (xbmcaddon.Addon(_ADDON_ID).getSetting('introdb_api_key') or '').strip()
+    except Exception:
+        api_key = (ADDON.getSetting('introdb_api_key') or '').strip()
+    if not api_key:
+        if is_paused and not session.submit_prompted_this_pause:
+            xbmc.log('[TheIntroDB] Submit blocked: no API key configured', xbmc.LOGINFO)
         return False
     if bool(all_segments.get('intro')):
+        if is_paused and not session.submit_prompted_this_pause:
+            xbmc.log('[TheIntroDB] Submit blocked: intro segments already exist', xbmc.LOGINFO)
         return False
     if session.submit_done_for_file:
+        if is_paused and not session.submit_prompted_this_pause:
+            xbmc.log('[TheIntroDB] Submit blocked: already submitted for this file', xbmc.LOGINFO)
         return False
     if not is_paused:
         return False
     if session.submit_prompted_this_pause:
         return False
+    xbmc.log('[TheIntroDB] Submit guards passed — showing overlay', xbmc.LOGINFO)
     return True
 
 
@@ -399,17 +416,16 @@ def _run_service() -> None:
         # ── Fetch media IDs (cached) ──
         if session.media_ids is None:
             session.media_ids = player.get_media_ids()
+            xbmc.log('[TheIntroDB] Media IDs: tmdb={} imdb={} S{}E{} movie={}'.format(
+                session.media_ids.get('tmdb_id'), session.media_ids.get('imdb_id'),
+                session.media_ids.get('season'), session.media_ids.get('episode'),
+                session.media_ids.get('is_movie', False)), xbmc.LOGINFO)
         media_ids = session.media_ids
         tmdb = media_ids.get('tmdb_id')
         imdb = media_ids.get('imdb_id')
         m_season = media_ids.get('season')
         m_episode = media_ids.get('episode')
         m_movie = media_ids.get('is_movie', False)
-
-        xbmc.log('[TheIntroDB] Media IDs: tmdb={} imdb={} S{}E{} movie={}'.format(
-            tmdb, imdb, m_season, m_episode, m_movie), xbmc.LOGINFO)
-        _debug_osd('tmdb={} imdb={} S{}E{}'.format(
-            tmdb or '-', imdb or '-', m_season or '?', m_episode or '?'))
 
         introdb_on = _fresh_bool('introdb_enabled')
         auto_skip = _fresh_bool('auto_skip')

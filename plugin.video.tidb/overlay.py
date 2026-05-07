@@ -46,7 +46,7 @@ class SkipOverlay(xbmcgui.WindowXMLDialog):
                 callback: Optional[Callable[[], None]] = None, intro_end: Optional[float] = None,
                 player: Optional[xbmc.Player] = None, monitor: Optional[xbmc.Monitor] = None,
                 segment_type: str = 'intro', segment_index: int = 0) -> 'SkipOverlay':
-        return super(SkipOverlay, cls).__new__(cls)
+        return super(SkipOverlay, cls).__new__(cls, xml_file, addon_path, skin, res)  # type: ignore[call-arg]
 
     def __init__(self, xml_file: str, addon_path: str, skin: str, res: str,
                  callback: Optional[Callable[[], None]] = None, intro_end: Optional[float] = None,
