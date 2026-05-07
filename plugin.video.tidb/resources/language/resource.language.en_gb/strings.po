@@ -58,3 +58,23 @@ msgstr ""
 msgctxt "#32012"
 msgid "Next Episode"
 msgstr ""
+
+msgctxt "#32020"
+msgid "Mark Intro Start"
+msgstr ""
+
+msgctxt "#32021"
+msgid "Mark Intro End"
+msgstr ""
+
+msgctxt "#32022"
+msgid "Submitted!"
+msgstr ""
+
+msgctxt "#32023"
+msgid "Submission failed"
+msgstr ""
+
+msgctxt "#32024"
+msgid "Offer to submit intros on pause (needs API key)"
+msgstr ""

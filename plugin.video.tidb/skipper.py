@@ -1,11 +1,12 @@
 # seek to intro end + offset from settings
 import xbmc
 import xbmcaddon
+from typing import Optional
 
 ADDON = xbmcaddon.Addon()
 
 
-def execute_skip(player, intro_start, intro_end, filename=None, segment_type='intro'):
+def execute_skip(player: xbmc.Player, intro_start: float, intro_end: float, filename: Optional[str] = None, segment_type: str = 'intro') -> bool:
     if not player.isPlaying():
         return False
 

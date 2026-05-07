@@ -3,35 +3,36 @@ import json
 import re
 import xbmc
 import xbmcaddon
+from typing import Optional, Dict, Any, List, Tuple
 
 ADDON = xbmcaddon.Addon()
 
 
 class TIDBPlayer(xbmc.Player):
-    def __init__(self):
+    def __init__(self) -> None:
         super(TIDBPlayer, self).__init__()
-        self._playback_started = False
-        self._filename = None
-        self._is_tv = False
-        self._is_video = False
+        self._playback_started: bool = False
+        self._filename: Optional[str] = None
+        self._is_tv: bool = False
+        self._is_video: bool = False
 
     @property
-    def playback_started(self):
+    def playback_started(self) -> bool:
         return self._playback_started
 
     @property
-    def filename(self):
+    def filename(self) -> Optional[str]:
         return self._filename
 
     @property
-    def is_tv_content(self):
+    def is_tv_content(self) -> bool:
         return self._is_tv
 
     @property
-    def is_video(self):
+    def is_video(self) -> bool:
         return self._is_video
 
-    def onAVStarted(self):
+    def onAVStarted(self) -> None:
         self._playback_started = True
         try:
             self._filename = self.getPlayingFile()
@@ -43,29 +44,29 @@ class TIDBPlayer(xbmc.Player):
         xbmc.log('[TheIntroDB] Playback started: {} (tv={}, video={})'.format(
             self._filename, self._is_tv, self._is_video), xbmc.LOGINFO)
 
-    def onPlayBackStopped(self):
+    def onPlayBackStopped(self) -> None:
         self._reset()
 
-    def onPlayBackEnded(self):
+    def onPlayBackEnded(self) -> None:
         self._reset()
 
-    def onPlayBackError(self):
+    def onPlayBackError(self) -> None:
         self._reset()
 
-    def _reset(self):
+    def _reset(self) -> None:
         xbmc.log('[TheIntroDB] Playback ended/stopped', xbmc.LOGINFO)
         self._playback_started = False
         self._filename = None
         self._is_tv = False
         self._is_video = False
 
-    def _check_is_video(self):
+    def _check_is_video(self) -> bool:
         try:
             return self.isPlayingVideo()
         except Exception:
             return False
 
-    def _detect_tv_content(self):
+    def _detect_tv_content(self) -> bool:
         # episodes, sxxeyy in path, or long video — rough filter for streamers
         if not self._is_video:
             return False
@@ -94,9 +95,9 @@ class TIDBPlayer(xbmc.Player):
 
         return True
 
-    def get_media_ids(self):
+    def get_media_ids(self) -> Dict[str, Any]:
         # json-rpc first (addons often set ids there), then videoinfotag
-        ids = {
+        ids: Dict[str, Any] = {
             'imdb_id': None,
             'tmdb_id': None,
             'season': None,
@@ -110,7 +111,7 @@ class TIDBPlayer(xbmc.Player):
         xbmc.log('[TheIntroDB] Extracted media IDs: {}'.format(ids), xbmc.LOGINFO)
         return ids
 
-    def get_next_episode(self):
+    def get_next_episode(self) -> Optional[Dict[str, Any]]:
         item = self._get_current_player_item()
         if not item or item.get('type') != 'episode':
             return None
@@ -129,8 +130,8 @@ class TIDBPlayer(xbmc.Player):
         })
         episodes = (response or {}).get('result', {}).get('episodes') or []
         current_key = (current_season, current_episode)
-        next_episode = None
-        next_key = None
+        next_episode: Optional[Dict[str, Any]] = None
+        next_key: Optional[Tuple[int, int]] = None
 
         for episode in episodes:
             episodeid = episode.get('episodeid')
@@ -166,7 +167,7 @@ class TIDBPlayer(xbmc.Player):
 
         return next_episode
 
-    def play_next_episode(self, next_episode=None):
+    def play_next_episode(self, next_episode: Optional[Dict[str, Any]] = None) -> bool:
         if next_episode is None:
             next_episode = self.get_next_episode()
         if not next_episode:
@@ -182,7 +183,7 @@ class TIDBPlayer(xbmc.Player):
             xbmc.log('[TheIntroDB] Failed to open next episode: {}'.format(response), xbmc.LOGWARNING)
         return False
 
-    def _active_video_player_id(self):
+    def _active_video_player_id(self) -> int:
         try:
             r = json.loads(xbmc.executeJSONRPC(
                 '{"jsonrpc":"2.0","method":"Player.GetActivePlayers","id":1}'))
@@ -196,7 +197,7 @@ class TIDBPlayer(xbmc.Player):
             pass
         return 1
 
-    def _get_current_player_item(self):
+    def _get_current_player_item(self) -> Dict[str, Any]:
         response = self._jsonrpc('Player.GetItem', {
             'playerid': self._active_video_player_id(),
             'properties': [
@@ -205,16 +206,16 @@ class TIDBPlayer(xbmc.Player):
         })
         return (response or {}).get('result', {}).get('item') or {}
 
-    def _jsonrpc(self, method, params=None):
+    def _jsonrpc(self, method: str, params: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
         try:
-            payload = {'jsonrpc': '2.0', 'method': method, 'id': 1}
+            payload: Dict[str, Any] = {'jsonrpc': '2.0', 'method': method, 'id': 1}
             if params is not None:
                 payload['params'] = params
             return json.loads(xbmc.executeJSONRPC(json.dumps(payload)))
         except Exception:
             return None
 
-    def _extract_numeric_id(self, value):
+    def _extract_numeric_id(self, value: Any) -> Optional[str]:
         try:
             s = str(value).strip()
             if not s:
@@ -225,7 +226,7 @@ class TIDBPlayer(xbmc.Player):
             return None
         return None
 
-    def _extract_tmdb_from_uniqueid(self, unique, keys):
+    def _extract_tmdb_from_uniqueid(self, unique: Any, keys: Tuple[str, ...]) -> Optional[str]:
         if not isinstance(unique, dict):
             return None
         for key in keys:
@@ -234,7 +235,7 @@ class TIDBPlayer(xbmc.Player):
                 return val
         return None
 
-    def _apply_uniqueid_dict(self, unique, ids):
+    def _apply_uniqueid_dict(self, unique: Any, ids: Dict[str, Any]) -> None:
         if not isinstance(unique, dict):
             return
 
@@ -261,7 +262,7 @@ class TIDBPlayer(xbmc.Player):
                 except (ValueError, TypeError):
                     pass
 
-    def _apply_episode_item_uniqueid_dict(self, unique, ids):
+    def _apply_episode_item_uniqueid_dict(self, unique: Any, ids: Dict[str, Any]) -> None:
         if not isinstance(unique, dict):
             return
 
@@ -279,7 +280,7 @@ class TIDBPlayer(xbmc.Player):
             if imdb_val and str(imdb_val).startswith('tt'):
                 ids['imdb_id'] = str(imdb_val)
 
-    def _tvshow_ids_from_library(self, tvshowid, ids, force_tmdb=False):
+    def _tvshow_ids_from_library(self, tvshowid: Any, ids: Dict[str, Any], force_tmdb: bool = False) -> None:
         try:
             tvshowid_int = int(tvshowid)
         except (ValueError, TypeError):
@@ -308,7 +309,7 @@ class TIDBPlayer(xbmc.Player):
         if imdbnumber and str(imdbnumber).startswith('tt') and not ids.get('imdb_id'):
             ids['imdb_id'] = str(imdbnumber)
 
-    def _tvshow_ids_by_title(self, title, ids, force_tmdb=False):
+    def _tvshow_ids_by_title(self, title: Optional[str], ids: Dict[str, Any], force_tmdb: bool = False) -> None:
         if not title:
             return
 
@@ -346,7 +347,7 @@ class TIDBPlayer(xbmc.Player):
         if imdbnumber and str(imdbnumber).startswith('tt') and not ids.get('imdb_id'):
             ids['imdb_id'] = str(imdbnumber)
 
-    def _ids_from_jsonrpc(self, ids):
+    def _ids_from_jsonrpc(self, ids: Dict[str, Any]) -> None:
         try:
             pid = self._active_video_player_id()
             response = self._jsonrpc('Player.GetItem', {
@@ -387,7 +388,7 @@ class TIDBPlayer(xbmc.Player):
             xbmc.log('[TheIntroDB] JSON-RPC Player.GetItem failed: {}'.format(e),
                       xbmc.LOGWARNING)
 
-    def _ids_from_infotag(self, ids):
+    def _ids_from_infotag(self, ids: Dict[str, Any]) -> None:
         try:
             tag = self.getVideoInfoTag()
         except Exception:

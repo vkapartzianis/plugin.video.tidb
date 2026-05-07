@@ -6,9 +6,10 @@ import xbmc
 import xbmcgui
 import xbmcaddon
 import xbmcvfs
+from typing import Optional, Callable
 
 ADDON = xbmcaddon.Addon()
-ADDON_PATH = ADDON.getAddonInfo('path')
+ADDON_PATH: str = ADDON.getAddonInfo('path')
 # Must match the last argument to SkipOverlay / WindowXMLDialog (folder under resources/skins/default/).
 _OVERLAY_RES = '1080i'
 _BG_IMAGE_SHADOW = 3003
@@ -33,7 +34,7 @@ _POLL_INTERVAL = 0.5
 _DISPLAY_DURATION = 5.0
 
 
-def _rounded_rect_texture_path():
+def _rounded_rect_texture_path() -> str:
     joined = os.path.join(
         ADDON_PATH, 'resources', 'skins', 'default', _OVERLAY_RES, 'rounded_rect.png')
     return xbmcvfs.translatePath(joined)
@@ -41,30 +42,34 @@ def _rounded_rect_texture_path():
 
 class SkipOverlay(xbmcgui.WindowXMLDialog):
 
-    def __new__(cls, xml_file, addon_path, skin, res,
-                callback=None, intro_end=None, player=None, monitor=None, segment_type='intro', segment_index=0):
+    def __new__(cls, xml_file: str, addon_path: str, skin: str, res: str,
+                callback: Optional[Callable[[], None]] = None, intro_end: Optional[float] = None,
+                player: Optional[xbmc.Player] = None, monitor: Optional[xbmc.Monitor] = None,
+                segment_type: str = 'intro', segment_index: int = 0) -> 'SkipOverlay':
         return super(SkipOverlay, cls).__new__(cls, xml_file, addon_path, skin, res)
 
-    def __init__(self, xml_file, addon_path, skin, res,
-                 callback=None, intro_end=None, player=None, monitor=None, segment_type='intro', segment_index=0):
+    def __init__(self, xml_file: str, addon_path: str, skin: str, res: str,
+                 callback: Optional[Callable[[], None]] = None, intro_end: Optional[float] = None,
+                 player: Optional[xbmc.Player] = None, monitor: Optional[xbmc.Monitor] = None,
+                 segment_type: str = 'intro', segment_index: int = 0) -> None:
         super(SkipOverlay, self).__init__(xml_file, addon_path, skin, res)
-        self._skip_pressed = False
-        self._callback = callback
-        self._intro_end = intro_end
-        self._player = player
-        self._monitor = monitor
-        self._poll_thread = None
-        self._closed = False
-        self._lock = threading.Lock()
-        self._segment_type = segment_type
-        self._segment_index = segment_index
-        self._display_deadline = None
+        self._skip_pressed: bool = False
+        self._callback: Optional[Callable[[], None]] = callback
+        self._intro_end: Optional[float] = intro_end
+        self._player: Optional[xbmc.Player] = player
+        self._monitor: Optional[xbmc.Monitor] = monitor
+        self._poll_thread: Optional[threading.Thread] = None
+        self._closed: bool = False
+        self._lock: threading.Lock = threading.Lock()
+        self._segment_type: str = segment_type
+        self._segment_index: int = segment_index
+        self._display_deadline: Optional[float] = None
 
     @property
-    def skip_pressed(self):
+    def skip_pressed(self) -> bool:
         return self._skip_pressed
 
-    def _get_segment_button_text(self, segment_type):
+    def _get_segment_button_text(self, segment_type: str) -> str:
         """Get the appropriate button text for the segment type."""
         segment_texts = {
             'intro': ADDON.getLocalizedString(STR_SKIP_INTRO),
@@ -77,7 +82,7 @@ class SkipOverlay(xbmcgui.WindowXMLDialog):
         
         return base_text
 
-    def onInit(self):
+    def onInit(self) -> None:
         mon = self._monitor if self._monitor is not None else xbmc.Monitor()
         if mon.abortRequested():
             self._dismiss_main_thread()
@@ -110,11 +115,11 @@ class SkipOverlay(xbmcgui.WindowXMLDialog):
             self._poll_thread.daemon = True
             self._poll_thread.start()
 
-    def onClick(self, controlId):
+    def onClick(self, controlId: int) -> None:
         if controlId == BUTTON_ID:
             self._do_skip()
 
-    def onAction(self, action):
+    def onAction(self, action: xbmcgui.Action) -> None:
         aid = action.getId()
         if aid == ACTION_SELECT:
             try:
@@ -126,7 +131,7 @@ class SkipOverlay(xbmcgui.WindowXMLDialog):
         if aid in (ACTION_PREVIOUS_MENU, ACTION_BACK):
             self._dismiss_main_thread()
 
-    def _do_skip(self):
+    def _do_skip(self) -> None:
         with self._lock:
             if self._closed:
                 return
@@ -139,7 +144,7 @@ class SkipOverlay(xbmcgui.WindowXMLDialog):
                 pass
         self._dismiss_main_thread()
 
-    def _poll_loop(self):
+    def _poll_loop(self) -> None:
         # close from worker thread using dialog.close builtin — kodi does not like gui from random threads otherwise
         mon = self._monitor if self._monitor is not None else xbmc.Monitor()
         # No immediate getTime check: playback advances while WindowXML loads; that race closed the dialog instantly.
@@ -169,7 +174,7 @@ class SkipOverlay(xbmcgui.WindowXMLDialog):
             except Exception:
                 pass
 
-    def _close_from_bg_thread(self):
+    def _close_from_bg_thread(self) -> None:
         with self._lock:
             if self._closed:
                 return
@@ -179,11 +184,11 @@ class SkipOverlay(xbmcgui.WindowXMLDialog):
         except Exception as e:
             xbmc.log('[TheIntroDB] Overlay close failed: {}'.format(e), xbmc.LOGWARNING)
 
-    def _stop_poll_thread(self):
+    def _stop_poll_thread(self) -> None:
         with self._lock:
             self._closed = True
 
-    def _dismiss_main_thread(self):
+    def _dismiss_main_thread(self) -> None:
         self._stop_poll_thread()
         try:
             self.close()
@@ -191,7 +196,9 @@ class SkipOverlay(xbmcgui.WindowXMLDialog):
             pass
 
 
-def show_skip_overlay(callback=None, intro_end=None, player=None, monitor=None, segment_type='intro', segment_index=0):
+def show_skip_overlay(callback: Optional[Callable[[], None]] = None, intro_end: Optional[float] = None,
+                      player: Optional[xbmc.Player] = None, monitor: Optional[xbmc.Monitor] = None,
+                      segment_type: str = 'intro', segment_index: int = 0) -> bool:
     # blocks until window closes; true if user hit skip
     mon = monitor if monitor is not None else xbmc.Monitor()
     if mon.abortRequested():

@@ -3,6 +3,7 @@ import json
 import time
 import xbmc
 import xbmcaddon
+from typing import Optional, Dict, Any, Tuple, List, Union
 
 try:
     from urllib.request import Request, urlopen
@@ -19,29 +20,29 @@ _last_request_time = 0.0
 _rate_limit_until = 0.0
 
 
-def _debug_logging():
+def _debug_logging() -> bool:
     return ADDON.getSetting('debug_logging') == 'true'
 
 
-def _log_resp(body):
+def _log_resp(body: str) -> None:
     if not _debug_logging():
         return
     snippet = body[:500] if len(body) > 500 else body
     xbmc.log('[TheIntroDB] TheIntroDB response: {}'.format(snippet), xbmc.LOGINFO)
 
 
-def _get_api_key():
+def _get_api_key() -> str:
     return (ADDON.getSetting('introdb_api_key') or '').strip()
 
 
-def _is_enabled():
+def _is_enabled() -> bool:
     try:
         return xbmcaddon.Addon(_ADDON_ID).getSetting('introdb_enabled') == 'true'
     except Exception:
         return ADDON.getSetting('introdb_enabled') == 'true'
 
 
-def _wait_rate_limit():
+def _wait_rate_limit() -> bool:
     global _last_request_time
     now = time.time()
     if now < _rate_limit_until:
@@ -55,7 +56,7 @@ def _wait_rate_limit():
     return True
 
 
-def _do_request(url, api_key):
+def _do_request(url: str, api_key: str) -> Optional[Dict[str, Any]]:
     global _rate_limit_until
     req = Request(url)
     req.add_header('Accept', 'application/json')
@@ -98,7 +99,7 @@ def _do_request(url, api_key):
         return None
 
 
-def _pick_best_segment(segments):
+def _pick_best_segment(segments: List[Dict[str, Any]]) -> Tuple[Optional[float], Optional[float]]:
     # intro array may have multiple rows — take best score
     if not segments:
         return None, None
@@ -128,7 +129,7 @@ def _pick_best_segment(segments):
     return None, None
 
 
-def _pick_best_segments_all_types(segments, segment_type):
+def _pick_best_segments_all_types(segments: List[Dict[str, Any]], segment_type: str) -> List[Dict[str, Any]]:
     """Pick the best segment(s) for a given type, handling multiple segments."""
     if not segments:
         return []
@@ -205,7 +206,7 @@ def _pick_best_segments_all_types(segments, segment_type):
     return result_segments
 
 
-def _normalize_imdb(imdb_id):
+def _normalize_imdb(imdb_id: Optional[str]) -> Optional[str]:
     if not imdb_id:
         return None
     s = str(imdb_id).strip()
@@ -214,14 +215,14 @@ def _normalize_imdb(imdb_id):
     return s
 
 
-def _valid_tmdb(tmdb_id):
+def _valid_tmdb(tmdb_id: Optional[Union[str, int]]) -> bool:
     try:
         return int(str(tmdb_id)) > 0
     except (ValueError, TypeError):
         return False
 
 
-def _episode_nums(season, episode):
+def _episode_nums(season: Optional[Union[str, int]], episode: Optional[Union[str, int]]) -> Tuple[Optional[int], Optional[int]]:
     try:
         s = int(season)
         e = int(episode)
@@ -230,7 +231,7 @@ def _episode_nums(season, episode):
         return None, None
 
 
-def _build_url(tmdb_id, imdb_id, season, episode, is_movie):
+def _build_url(tmdb_id: Optional[Union[str, int]], imdb_id: Optional[str], season: Optional[Union[str, int]], episode: Optional[Union[str, int]], is_movie: bool) -> Tuple[Optional[str], Optional[str]]:
     # prefer tmdb; if missing use imdb (api matches show/episode)
     if tmdb_id and _valid_tmdb(tmdb_id):
         tid = str(tmdb_id).strip()
@@ -298,7 +299,103 @@ def query_intro(tmdb_id=None, imdb_id=None, season=None, episode=None, is_movie=
     return intro_start, intro_end
 
 
-def query_all_segments(tmdb_id=None, imdb_id=None, season=None, episode=None, is_movie=False):
+def submit_segment(tmdb_id: Optional[Union[str, int]] = None, imdb_id: Optional[str] = None, season: Optional[Union[str, int]] = None, episode: Optional[Union[str, int]] = None,
+                    is_movie: bool = False, segment: str = 'intro', start_sec: Optional[float] = None, end_sec: Optional[float] = None) -> Tuple[bool, str]:
+    """Submit a segment timestamp to TheIntroDB.
+
+    Returns (success, message) tuple.
+    """
+    api_key = _get_api_key()
+    if not api_key:
+        return False, 'API key required for submissions. Set it in addon settings.'
+
+    if not tmdb_id or not _valid_tmdb(tmdb_id):
+        # fall back to imdb_id if we have one — the API can resolve it
+        if not _normalize_imdb(imdb_id):
+            return False, 'Need a TMDB or IMDb ID to submit.'
+
+    if not _wait_rate_limit():
+        return False, 'Rate limited. Try again later.'
+
+    payload = {
+        'segment': segment,
+    }
+
+    if tmdb_id and _valid_tmdb(tmdb_id):
+        payload['tmdb_id'] = int(str(tmdb_id).strip())
+
+    imdb = _normalize_imdb(imdb_id)
+    if imdb:
+        payload['imdb_id'] = imdb
+
+    if is_movie:
+        payload['type'] = 'movie'
+    else:
+        payload['type'] = 'tv'
+        s, e = _episode_nums(season, episode)
+        if s is None or e is None:
+            return False, 'Season and episode are required for TV submissions.'
+        payload['season'] = s
+        payload['episode'] = e
+
+    if start_sec is not None:
+        payload['start_sec'] = round(float(start_sec), 1)
+    else:
+        payload['start_sec'] = None
+    if end_sec is not None:
+        payload['end_sec'] = round(float(end_sec), 1)
+    else:
+        payload['end_sec'] = None
+
+    url = '{}/submit'.format(API_BASE)
+    xbmc.log('[TheIntroDB] Submitting segment: {} -> {}'.format(url, payload), xbmc.LOGINFO)
+
+    body_bytes = json.dumps(payload).encode('utf-8')
+    req = Request(url, data=body_bytes, method='POST')
+    req.add_header('Content-Type', 'application/json')
+    req.add_header('Accept', 'application/json')
+    req.add_header('User-Agent', 'TheIntroDB Kodi Addon/1.0')
+    req.add_header('Authorization', 'Bearer {}'.format(api_key))
+
+    global _rate_limit_until
+    try:
+        resp = urlopen(req, timeout=10)
+        resp_body = resp.read().decode('utf-8')
+        data = json.loads(resp_body)
+        _log_resp(resp_body)
+        if data.get('ok'):
+            status = (data.get('submission') or {}).get('status', 'pending')
+            return True, 'Submitted! Status: {}'.format(status)
+        return True, 'Submitted successfully.'
+    except HTTPError as e:
+        try:
+            err_body = e.read().decode('utf-8')
+            err_data = json.loads(err_body)
+            err_msg = err_data.get('error', 'HTTP {}'.format(e.code))
+        except Exception:
+            err_msg = 'HTTP {}'.format(e.code)
+        if e.code == 429:
+            retry = 300
+            for header in ('X-UsageLimit-Reset', 'X-RateLimit-Reset', 'Retry-After'):
+                val = e.headers.get(header)
+                if val:
+                    try:
+                        retry = int(val)
+                    except ValueError:
+                        pass
+                    break
+            _rate_limit_until = time.time() + retry
+        xbmc.log('[TheIntroDB] Submit failed: {}'.format(err_msg), xbmc.LOGWARNING)
+        return False, err_msg
+    except URLError as e:
+        xbmc.log('[TheIntroDB] Submit network error: {}'.format(e.reason), xbmc.LOGWARNING)
+        return False, 'Network error: {}'.format(e.reason)
+    except Exception as e:
+        xbmc.log('[TheIntroDB] Submit error: {}'.format(e), xbmc.LOGERROR)
+        return False, str(e)
+
+
+def query_all_segments(tmdb_id: Optional[Union[str, int]] = None, imdb_id: Optional[str] = None, season: Optional[Union[str, int]] = None, episode: Optional[Union[str, int]] = None, is_movie: bool = False) -> Dict[str, Any]:
     # returns dict with all segment types and their segments
     if not _is_enabled():
         return {}
