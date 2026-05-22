@@ -1,4 +1,3 @@
-# http client for theintrodb v2 /media — url from tmdb or imdb plus season/episode when needed
 import json
 import time
 import xbmc
@@ -14,7 +13,7 @@ except ImportError:
 ADDON = xbmcaddon.Addon()
 _ADDON_ID = ADDON.getAddonInfo('id')
 
-API_BASE = 'https://api.theintrodb.org/v2'
+API_BASE = 'https://api.theintrodb.org/v3'
 MIN_REQUEST_GAP = 0.4  # small gap between requests
 _last_request_time = 0.0
 _rate_limit_until = 0.0
@@ -231,17 +230,26 @@ def _episode_nums(season: Optional[Union[str, int]], episode: Optional[Union[str
         return None, None
 
 
-def _build_url(tmdb_id: Optional[Union[str, int]], imdb_id: Optional[str], season: Optional[Union[str, int]], episode: Optional[Union[str, int]], is_movie: bool) -> Tuple[Optional[str], Optional[str]]:
+def _build_url(tmdb_id: Optional[Union[str, int]], imdb_id: Optional[str], season: Optional[Union[str, int]], episode: Optional[Union[str, int]], is_movie: bool, duration_ms: Optional[Union[str, int]] = None) -> Tuple[Optional[str], Optional[str]]:
     # prefer tmdb; if missing use imdb (api matches show/episode)
+    duration_q = ''
+    try:
+        if duration_ms is not None:
+            dur_int = int(duration_ms)
+            if dur_int > 0:
+                duration_q = '&duration_ms={}'.format(dur_int)
+    except (TypeError, ValueError):
+        duration_q = ''
+
     if tmdb_id and _valid_tmdb(tmdb_id):
         tid = str(tmdb_id).strip()
         if is_movie:
-            return '{}/media?tmdb_id={}'.format(API_BASE, tid), 'tmdb'
+            return '{}/media?tmdb_id={}{}'.format(API_BASE, tid, duration_q), 'tmdb'
         s, e = _episode_nums(season, episode)
         if s is None or e is None or s <= 0 or e <= 0:
             return None, None
         return (
-            '{}/media?tmdb_id={}&season={}&episode={}'.format(API_BASE, tid, s, e),
+            '{}/media?tmdb_id={}&season={}&episode={}{}'.format(API_BASE, tid, s, e, duration_q),
             'tmdb',
         )
 
@@ -250,21 +258,21 @@ def _build_url(tmdb_id: Optional[Union[str, int]], imdb_id: Optional[str], seaso
         return None, None
 
     if is_movie:
-        return '{}/media?imdb_id={}'.format(API_BASE, imdb), 'imdb'
+        return '{}/media?imdb_id={}{}'.format(API_BASE, imdb, duration_q), 'imdb'
 
     s, e = _episode_nums(season, episode)
     if s is None or e is None or s <= 0 or e <= 0:
         return None, None
-    return '{}/media?imdb_id={}&season={}&episode={}'.format(
-        API_BASE, imdb, s, e), 'imdb'
+    return '{}/media?imdb_id={}&season={}&episode={}{}'.format(
+        API_BASE, imdb, s, e, duration_q), 'imdb'
 
 
-def query_intro(tmdb_id=None, imdb_id=None, season=None, episode=None, is_movie=False):
+def query_intro(tmdb_id=None, imdb_id=None, season=None, episode=None, is_movie=False, duration_ms: Optional[Union[str, int]] = None):
     # returns intro start/end in seconds, or none
     if not _is_enabled():
         return None, None
 
-    url, mode = _build_url(tmdb_id, imdb_id, season, episode, is_movie)
+    url, mode = _build_url(tmdb_id, imdb_id, season, episode, is_movie, duration_ms=duration_ms)
     if not url:
         if tmdb_id or imdb_id:
             xbmc.log(
@@ -300,7 +308,7 @@ def query_intro(tmdb_id=None, imdb_id=None, season=None, episode=None, is_movie=
 
 
 def submit_segment(tmdb_id: Optional[Union[str, int]] = None, imdb_id: Optional[str] = None, season: Optional[Union[str, int]] = None, episode: Optional[Union[str, int]] = None,
-                    is_movie: bool = False, segment: str = 'intro', start_sec: Optional[float] = None, end_sec: Optional[float] = None) -> Tuple[bool, str]:
+                    is_movie: bool = False, segment: str = 'intro', start_sec: Optional[float] = None, end_sec: Optional[float] = None, video_duration_ms: Optional[Union[str, int]] = None) -> Tuple[bool, str]:
     """Submit a segment timestamp to TheIntroDB.
 
     Returns (success, message) tuple.
@@ -346,6 +354,14 @@ def submit_segment(tmdb_id: Optional[Union[str, int]] = None, imdb_id: Optional[
         payload['end_sec'] = round(float(end_sec), 1)
     else:
         payload['end_sec'] = None
+    
+    try:
+        if video_duration_ms is not None:
+            dur_int = int(video_duration_ms)
+            if dur_int == 0 or (300000 <= dur_int <= 21600000):
+                payload['video_duration_ms'] = dur_int
+    except (TypeError, ValueError):
+        pass
 
     url = '{}/submit'.format(API_BASE)
     xbmc.log('[TheIntroDB] Submitting segment: {} -> {}'.format(url, payload), xbmc.LOGINFO)
@@ -363,9 +379,14 @@ def submit_segment(tmdb_id: Optional[Union[str, int]] = None, imdb_id: Optional[
         resp_body = resp.read().decode('utf-8')
         data = json.loads(resp_body)
         _log_resp(resp_body)
-        if data.get('ok'):
+        if data.get('ok') or data.get('submissions') or data.get('submission'):
+            submissions = data.get('submissions') or []
+            if submissions and isinstance(submissions, list) and isinstance(submissions[0], dict):
+                status = submissions[0].get('status', 'pending')
+                return True, 'Submitted! Status: {}'.format(status)
             status = (data.get('submission') or {}).get('status', 'pending')
-            return True, 'Submitted! Status: {}'.format(status)
+            if status:
+                return True, 'Submitted! Status: {}'.format(status)
         return True, 'Submitted successfully.'
     except HTTPError as e:
         try:
@@ -395,12 +416,12 @@ def submit_segment(tmdb_id: Optional[Union[str, int]] = None, imdb_id: Optional[
         return False, str(e)
 
 
-def query_all_segments(tmdb_id: Optional[Union[str, int]] = None, imdb_id: Optional[str] = None, season: Optional[Union[str, int]] = None, episode: Optional[Union[str, int]] = None, is_movie: bool = False) -> Dict[str, Any]:
+def query_all_segments(tmdb_id: Optional[Union[str, int]] = None, imdb_id: Optional[str] = None, season: Optional[Union[str, int]] = None, episode: Optional[Union[str, int]] = None, is_movie: bool = False, duration_ms: Optional[Union[str, int]] = None) -> Dict[str, Any]:
     # returns dict with all segment types and their segments
     if not _is_enabled():
         return {}
 
-    url, mode = _build_url(tmdb_id, imdb_id, season, episode, is_movie)
+    url, mode = _build_url(tmdb_id, imdb_id, season, episode, is_movie, duration_ms=duration_ms)
     if not url:
         if tmdb_id or imdb_id:
             xbmc.log(

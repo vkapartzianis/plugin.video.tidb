@@ -376,6 +376,7 @@ def _mark_end_and_submit(session: PlaybackSession, player: TIDBPlayer, monitor: 
         segment='intro',
         start_sec=start,
         end_sec=end,
+        video_duration_ms=media_ids.get('duration_ms'),
     )
     if success:
         xbmc.executebuiltin('Notification(TheIntroDB, {}, 3000)'.format(msg))
@@ -454,6 +455,7 @@ def _run_service() -> None:
                 session.all_segments = introdb.query_all_segments(
                     tmdb_id=tmdb, imdb_id=imdb,
                     season=m_season, episode=m_episode, is_movie=m_movie,
+                    duration_ms=media_ids.get('duration_ms'),
                 )
             all_segments = session.all_segments or {}
 

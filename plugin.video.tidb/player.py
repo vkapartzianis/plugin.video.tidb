@@ -123,13 +123,53 @@ class TIDBPlayer(xbmc.Player):
             'season': None,
             'episode': None,
             'is_movie': False,
+            'duration_ms': None,
         }
 
         self._ids_from_jsonrpc(ids)
         self._ids_from_infotag(ids)
+        ids['duration_ms'] = self._get_video_duration_ms()
 
         xbmc.log('[TheIntroDB] Extracted media IDs: {}'.format(ids), xbmc.LOGINFO)
         return ids
+
+    def _get_video_duration_ms(self) -> Optional[int]:
+        try:
+            tag = self.getVideoInfoTag()
+            dur = tag.getDuration()
+            if dur:
+                dur_sec = int(dur)
+                if dur_sec > 0:
+                    return dur_sec * 1000
+        except Exception:
+            pass
+
+        try:
+            response = self._jsonrpc('Player.GetProperties', {
+                'playerid': self._active_video_player_id(),
+                'properties': ['totaltime'],
+            })
+            totaltime = (response or {}).get('result', {}).get('totaltime') or {}
+            h = int(totaltime.get('hours', 0) or 0)
+            m = int(totaltime.get('minutes', 0) or 0)
+            s = int(totaltime.get('seconds', 0) or 0)
+            ms = int(totaltime.get('milliseconds', 0) or 0)
+            total_ms = ((h * 3600 + m * 60 + s) * 1000) + ms
+            if total_ms > 0:
+                return total_ms
+        except Exception:
+            pass
+
+        try:
+            total = self.getTotalTime()
+            if total:
+                total_ms = int(round(float(total) * 1000.0))
+                if total_ms > 0:
+                    return total_ms
+        except Exception:
+            pass
+
+        return None
 
     def get_next_episode(self) -> Optional[Dict[str, Any]]:
         item = self._get_current_player_item()
