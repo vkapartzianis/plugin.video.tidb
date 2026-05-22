@@ -108,7 +108,6 @@ class AptabaseReporter:
         else:
             self._session_id = _new_session_id()
             self._last_touch_ts = 0.0
-        self._start_sent_for_session = str(self._state.get('start_sent_session_id') or '') == self._session_id
         self._last_persist_ts = 0.0
         self._thread = threading.Thread(target=self._worker, name='tidb-aptabase', daemon=True)
         self._thread.start()
@@ -117,17 +116,32 @@ class AptabaseReporter:
             safe_key = app_key[-6:] if app_key else ''
             xbmc.log('[TheIntroDB] Aptabase init enabled={} host={} key=*{} session=*{}'.format(enabled, host, safe_key, self._session_id[-6:]), xbmc.LOGINFO)
 
-    def track(self, event_name: str, props: Optional[Dict[str, Any]] = None) -> None:
+    def track_daily(self, event_name: str, props: Optional[Dict[str, Any]] = None) -> None:
+        try:
+            day = datetime.datetime.utcnow().strftime('%Y-%m-%d')
+        except Exception:
+            day = ''
+        if not day or not event_name:
+            return
+        key = 'daily_sent_{}'.format(event_name)
+        if str(self._state.get(key) or '') == day:
+            return
+        self._state[key] = day
+        self.track(event_name, props, force_persist=True)
+
+    def _persist_state(self, now: float, force: bool = False) -> None:
+        if not force and (now - self._last_persist_ts) < PERSIST_INTERVAL_SECS:
+            return
+        _write_json(self._state_path, self._state)
+        self._last_persist_ts = now
+
+    def track(self, event_name: str, props: Optional[Dict[str, Any]] = None, force_persist: bool = False) -> None:
         enabled, host, app_key = _get_config()
         if not enabled or not host or not app_key or not event_name:
             return
         now = time.time()
         if self._last_touch_ts and (now - self._last_touch_ts) > SESSION_TIMEOUT_SECS:
             self._session_id = _new_session_id()
-            self._start_sent_for_session = False
-
-        if event_name == 'service_started' and self._start_sent_for_session:
-            return
 
         clean_props: Dict[str, Any] = {}
         if isinstance(props, dict):
@@ -137,17 +151,10 @@ class AptabaseReporter:
                 else:
                     clean_props[str(k)] = str(v)
 
-        if event_name == 'service_started':
-            self._start_sent_for_session = True
-            self._state['start_sent_session_id'] = self._session_id
-            self._state['last_service_started_ts'] = now
-
         self._last_touch_ts = now
         self._state['session_id'] = self._session_id
         self._state['last_touch_ts'] = self._last_touch_ts
-        if (now - self._last_persist_ts) >= PERSIST_INTERVAL_SECS or event_name == 'service_started':
-            _write_json(self._state_path, self._state)
-            self._last_persist_ts = now
+        self._persist_state(now, force=force_persist)
 
         try:
             self._q.put_nowait({
@@ -175,9 +182,7 @@ class AptabaseReporter:
             now = time.time()
             self._state['session_id'] = self._session_id
             self._state['last_touch_ts'] = self._last_touch_ts
-            if (now - self._last_persist_ts) >= 0.5:
-                _write_json(self._state_path, self._state)
-                self._last_persist_ts = now
+            self._persist_state(now, force=True)
         except Exception:
             pass
 
@@ -219,8 +224,6 @@ class AptabaseReporter:
 
             now = time.time()
             should_flush = (len(buf) >= max_batch) or (buf and (now - last_flush) >= flush_interval)
-            if got_item and got_item.get('eventName') == 'service_started':
-                should_flush = True
             if not should_flush:
                 continue
 

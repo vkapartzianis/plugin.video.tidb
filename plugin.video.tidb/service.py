@@ -397,8 +397,6 @@ def _run_service() -> None:
     REPORTER = aptabase_analytics.AptabaseReporter()
 
     xbmc.log('[TheIntroDB] Service started', xbmc.LOGINFO)
-    if REPORTER:
-        REPORTER.track('service_started')
 
     while not monitor.abortRequested():
         if monitor.waitForAbort(1.0):
@@ -422,6 +420,8 @@ def _run_service() -> None:
             session.current_file = filename
             xbmc.log('[TheIntroDB] Reset segment tracking for file: {}'.format(filename),
                      xbmc.LOGINFO)
+            if REPORTER:
+                REPORTER.track_daily('addon_active')
 
         _debug_osd('Monitoring: {}'.format(filename[-40:]))
 
@@ -484,7 +484,6 @@ def _run_service() -> None:
 
     xbmc.log('[TheIntroDB] Service stopped', xbmc.LOGINFO)
     if REPORTER:
-        REPORTER.track('service_stopped')
         REPORTER.flush(1.0)
         REPORTER.close(1.0)
         REPORTER = None
