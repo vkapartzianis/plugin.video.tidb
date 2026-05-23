@@ -139,7 +139,7 @@ def _show_skip_overlay(player: TIDBPlayer, monitor: xbmc.Monitor, api_end: float
     )
 
 
-def _handle_segment(segment: Dict[str, Any], segment_idx: int, player: TIDBPlayer, monitor: xbmc.Monitor, session: PlaybackSession, filename: str, auto_skip: bool) -> Optional[str]:
+def _handle_segment(segment: Dict[str, Any], segment_idx: int, player: TIDBPlayer, monitor: xbmc.Monitor, session: PlaybackSession, filename: str) -> Optional[str]:
     """Process a single segment: auto-skip, next-episode, or show skip button.
 
     Returns 'break' if the service loop should exit, else None.
@@ -175,6 +175,14 @@ def _handle_segment(segment: Dict[str, Any], segment_idx: int, player: TIDBPlaye
     segment_name = segment_names.get(segment_type, segment_type.title())
     overlay_type = segment_type
 
+    if _fresh_bool('auto_skip_{}'.format(segment_type)):
+        skipper.execute_skip(player, api_start, api_end, filename, segment_type)
+        if REPORTER:
+            REPORTER.track('segment_auto_skipped', {'segment_type': segment_type})
+        _debug_osd('Auto-skipped {}'.format(segment_name))
+        xbmc.log('[TheIntroDB] Auto-skipped {} to {:.1f}s'.format(segment_name, api_end), xbmc.LOGINFO)
+        return None
+
     # Check for next-episode promotion
     if is_next_ep:
         if not session.next_episode_checked:
@@ -184,16 +192,7 @@ def _handle_segment(segment: Dict[str, Any], segment_idx: int, player: TIDBPlaye
             return _handle_next_episode(
                 player, monitor, session, api_end, segment_type, segment_idx)
 
-    # Auto-skip intro segments only
-    if auto_skip and segment_type == 'intro':
-        skipper.execute_skip(player, api_start, api_end, filename, segment_type)
-        if REPORTER:
-            REPORTER.track('segment_auto_skipped', {'segment_type': segment_type})
-        _debug_osd('Auto-skipped {}'.format(segment_name))
-        xbmc.log('[TheIntroDB] Auto-skipped {} to {:.1f}s'.format(segment_name, api_end), xbmc.LOGINFO)
-        return None
-
-    # Show skip button (for non-intro when auto_skip, or always when not auto_skip)
+    # Show skip button
     xbmc.log('[TheIntroDB] Showing skip overlay for {}'.format(segment_name), xbmc.LOGINFO)
     pressed = _show_skip_overlay(player, monitor, api_end, overlay_type, segment_idx)
     if pressed is None:
@@ -441,8 +440,6 @@ def _run_service() -> None:
         m_movie = media_ids.get('is_movie', False)
 
         introdb_on = _fresh_bool('introdb_enabled')
-        auto_skip = _fresh_bool('auto_skip')
-
         if _debug_logging():
             _raw = xbmcaddon.Addon(_ADDON_ID).getSetting('introdb_enabled')
             xbmc.log('[TheIntroDB] introdb_enabled raw={!r} lookups_on={}'.format(
@@ -474,7 +471,7 @@ def _run_service() -> None:
 
         for seg_idx, segment in enumerate(enabled_segments):
             result = _handle_segment(
-                segment, seg_idx, player, monitor, session, filename, auto_skip)
+                segment, seg_idx, player, monitor, session, filename)
             if result == 'break':
                 break
 
