@@ -15,10 +15,6 @@ msgctxt "#32001"
 msgid "Skip Intro"
 msgstr "Pomiń czołówkę"
 
-msgctxt "#32002"
-msgid "Smart Intro Skip"
-msgstr "Inteligentne pomijanie czołówki"
-
 msgctxt "#32003"
 msgid "Skip Recap"
 msgstr "Pomiń podsumowanie"
@@ -47,10 +43,6 @@ msgctxt "#32009"
 msgid "Enable preview skipping"
 msgstr "Włącz pomijanie zapowiedzi"
 
-msgctxt "#32010"
-msgid "Auto-skip segments (no button)"
-msgstr "Automatyczne pomijanie segmentów (bez przycisku)"
-
 msgctxt "#32011"
 msgid "Extra seconds to skip past segment end"
 msgstr "Dodatkowe sekundy po końcu segmentu"
@@ -58,3 +50,83 @@ msgstr "Dodatkowe sekundy po końcu segmentu"
 msgctxt "#32012"
 msgid "Next Episode"
 msgstr "Kolejny odcinek"
+
+msgctxt "#32020"
+msgid "Mark Intro Start"
+msgstr ""
+
+msgctxt "#32021"
+msgid "Mark Intro End"
+msgstr ""
+
+msgctxt "#32022"
+msgid "Submitted!"
+msgstr ""
+
+msgctxt "#32023"
+msgid "Submission failed"
+msgstr ""
+
+msgctxt "#32024"
+msgid "Offer to submit intros on pause (needs API key)"
+msgstr ""
+
+msgctxt "#32025"
+msgid "General"
+msgstr ""
+
+msgctxt "#32026"
+msgid "Segment Types"
+msgstr ""
+
+msgctxt "#32027"
+msgid "TheIntroDB"
+msgstr ""
+
+msgctxt "#32028"
+msgid "Submissions"
+msgstr ""
+
+msgctxt "#32029"
+msgid "Privacy"
+msgstr ""
+
+msgctxt "#32030"
+msgid "Debug"
+msgstr ""
+
+msgctxt "#32031"
+msgid "Enable lookups"
+msgstr ""
+
+msgctxt "#32032"
+msgid "Optional TheIntroDB API key"
+msgstr ""
+
+msgctxt "#32033"
+msgid "Anonymous usage reporting"
+msgstr ""
+
+msgctxt "#32034"
+msgid "Verbose logging (kodi.log)"
+msgstr ""
+
+msgctxt "#32035"
+msgid "On-screen debug notifications"
+msgstr ""
+
+msgctxt "#32036"
+msgid "Auto-skip intro segments"
+msgstr ""
+
+msgctxt "#32037"
+msgid "Auto-skip recap segments"
+msgstr ""
+
+msgctxt "#32038"
+msgid "Auto-skip credits segments"
+msgstr ""
+
+msgctxt "#32039"
+msgid "Auto-skip preview segments"
+msgstr ""
