@@ -14,6 +14,11 @@ ADDON = xbmcaddon.Addon()
 _ADDON_ID = ADDON.getAddonInfo('id')
 
 API_BASE = 'https://api.theintrodb.org/v3'
+# Fallback source queried when the primary has no data for a title.
+# Different API: TV episodes only, looked up by IMDb id, with a flat response
+# shape (one object per type, 'outro' instead of 'credits', no 'preview').
+API_BASE_FALLBACK = 'https://api.introdb.app'
+SEGMENT_TYPES = ('intro', 'recap', 'credits', 'preview')
 MIN_REQUEST_GAP = 0.4  # small gap between requests
 _last_request_time = 0.0
 _rate_limit_until = 0.0
@@ -267,12 +272,89 @@ def _build_url(tmdb_id: Optional[Union[str, int]], imdb_id: Optional[str], seaso
         API_BASE, imdb, s, e, duration_q), 'imdb'
 
 
+def _query_primary(tmdb_id, imdb_id, season, episode, is_movie, duration_ms) -> Optional[Dict[str, Any]]:
+    """Fetch the raw segment payload from TheIntroDB, or None on miss/error."""
+    url, mode = _build_url(tmdb_id, imdb_id, season, episode, is_movie, duration_ms=duration_ms)
+    if not url:
+        return None
+
+    xbmc.log('[TheIntroDB] TheIntroDB query ({}): {}'.format(mode, url), xbmc.LOGINFO)
+
+    if not _wait_rate_limit():
+        return None
+
+    data = _do_request(url, _get_api_key())
+    if not data:
+        return None
+    if 'error' in data:
+        xbmc.log('[TheIntroDB] TheIntroDB error: {}'.format(data['error']), xbmc.LOGINFO)
+        return None
+    return data
+
+
+def _query_fallback(imdb_id, season, episode, is_movie) -> Optional[Dict[str, Any]]:
+    """Fetch from IntroDB.app and normalize it into TheIntroDB's internal shape.
+
+    IntroDB.app only serves TV episodes keyed by IMDb id, and returns a flat
+    object with one segment (or null) per type using 'outro' for end credits
+    and no 'preview'. We map it back to the list-per-type layout the segment
+    processors expect: {'intro': [seg], 'recap': [seg], 'credits': [seg]}.
+    """
+    if is_movie:
+        return None
+    imdb = _normalize_imdb(imdb_id)
+    if not imdb:
+        return None
+    s, e = _episode_nums(season, episode)
+    if s is None or e is None or s <= 0 or e <= 0:
+        return None
+
+    url = '{}/segments?imdb_id={}&season={}&episode={}'.format(API_BASE_FALLBACK, imdb, s, e)
+    xbmc.log('[TheIntroDB] IntroDB.app query: {}'.format(url), xbmc.LOGINFO)
+
+    if not _wait_rate_limit():
+        return None
+
+    # Public GET endpoint — no auth (the stored key is TheIntroDB's, wrong format here).
+    data = _do_request(url, '')
+    if not isinstance(data, dict):
+        return None
+
+    # introdb.app key -> internal segment type
+    key_map = (('intro', 'intro'), ('recap', 'recap'), ('outro', 'credits'))
+    normalized = {}  # type: Dict[str, Any]
+    for src_key, internal_key in key_map:
+        seg = data.get(src_key)
+        if isinstance(seg, dict):
+            # Wrap the single object so it flows through the list-based processors.
+            normalized[internal_key] = [seg]
+    return normalized
+
+
+def _request_media(tmdb_id: Optional[Union[str, int]], imdb_id: Optional[str], season: Optional[Union[str, int]], episode: Optional[Union[str, int]], is_movie: bool, duration_ms: Optional[Union[str, int]], want_types: Tuple[str, ...]) -> Optional[Dict[str, Any]]:
+    """Fetch segment data for a title.
+
+    Queries TheIntroDB first; if it has none of ``want_types``, falls back to
+    IntroDB.app (TV episodes by IMDb id). Returns whatever data has the wanted
+    segments, else any valid-but-empty response, else None."""
+    data = _query_primary(tmdb_id, imdb_id, season, episode, is_movie, duration_ms)
+    if data and any(data.get(t) for t in want_types):
+        return data
+
+    fallback = _query_fallback(imdb_id, season, episode, is_movie)
+    if fallback and any(fallback.get(t) for t in want_types):
+        xbmc.log('[TheIntroDB] Using IntroDB.app fallback data', xbmc.LOGINFO)
+        return fallback
+
+    return data or fallback
+
+
 def query_intro(tmdb_id=None, imdb_id=None, season=None, episode=None, is_movie=False, duration_ms: Optional[Union[str, int]] = None):
     # returns intro start/end in seconds, or none
     if not _is_enabled():
         return None, None
 
-    url, mode = _build_url(tmdb_id, imdb_id, season, episode, is_movie, duration_ms=duration_ms)
+    url, _ = _build_url(tmdb_id, imdb_id, season, episode, is_movie, duration_ms=duration_ms)
     if not url:
         if tmdb_id or imdb_id:
             xbmc.log(
@@ -283,18 +365,9 @@ def query_intro(tmdb_id=None, imdb_id=None, season=None, episode=None, is_movie=
             xbmc.log('[TheIntroDB] TheIntroDB: no TMDB or IMDb id', xbmc.LOGINFO)
         return None, None
 
-    xbmc.log('[TheIntroDB] TheIntroDB query ({}): {}'.format(mode, url), xbmc.LOGINFO)
-
-    if not _wait_rate_limit():
-        return None, None
-
-    api_key = _get_api_key()
-    data = _do_request(url, api_key)
+    data = _request_media(tmdb_id, imdb_id, season, episode, is_movie, duration_ms,
+                          want_types=('intro',))
     if not data:
-        return None, None
-
-    if 'error' in data:
-        xbmc.log('[TheIntroDB] TheIntroDB error: {}'.format(data['error']), xbmc.LOGINFO)
         return None, None
 
     intro_start, intro_end = _pick_best_segment(data.get('intro', []))
@@ -421,7 +494,7 @@ def query_all_segments(tmdb_id: Optional[Union[str, int]] = None, imdb_id: Optio
     if not _is_enabled():
         return {}
 
-    url, mode = _build_url(tmdb_id, imdb_id, season, episode, is_movie, duration_ms=duration_ms)
+    url, _ = _build_url(tmdb_id, imdb_id, season, episode, is_movie, duration_ms=duration_ms)
     if not url:
         if tmdb_id or imdb_id:
             xbmc.log(
@@ -432,18 +505,9 @@ def query_all_segments(tmdb_id: Optional[Union[str, int]] = None, imdb_id: Optio
             xbmc.log('[TheIntroDB] TheIntroDB: no TMDB or IMDb id', xbmc.LOGINFO)
         return {}
 
-    xbmc.log('[TheIntroDB] TheIntroDB query all segments ({}): {}'.format(mode, url), xbmc.LOGINFO)
-
-    if not _wait_rate_limit():
-        return {}
-
-    api_key = _get_api_key()
-    data = _do_request(url, api_key)
+    data = _request_media(tmdb_id, imdb_id, season, episode, is_movie, duration_ms,
+                          want_types=SEGMENT_TYPES)
     if not data:
-        return {}
-
-    if 'error' in data:
-        xbmc.log('[TheIntroDB] TheIntroDB error: {}'.format(data['error']), xbmc.LOGINFO)
         return {}
 
     # Process all segment types
@@ -457,8 +521,7 @@ def query_all_segments(tmdb_id: Optional[Union[str, int]] = None, imdb_id: Optio
             if key in ['intro', 'recap', 'credits', 'preview']:
                 xbmc.log('[TheIntroDB] API {} raw data: {}'.format(key, len(data.get(key, []))), xbmc.LOGINFO)
     
-    segment_types = ['intro', 'recap', 'credits', 'preview']
-    for seg_type in segment_types:
+    for seg_type in SEGMENT_TYPES:
         raw_segments = data.get(seg_type, [])
         if ADDON.getSetting('debug_logging') == 'true':
             xbmc.log('[TheIntroDB] Processing {}: {} raw segments'.format(seg_type, len(raw_segments)), xbmc.LOGINFO)
