@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- 720p Skip/Watch choice; defaultRes in overlay.py is 1080i — keep in sync if you switch resolution.
-     Skip pill pinned at single-button position (posy 580); Watch sits above it. -->
+     Skip pill pinned at single-button position (1029,581); Watch sits to its LEFT (831,581).
+     Bg comes from Python-set image controls. Default bg 70% white + dark text;
+     focus = solid white bg + glow ring + 104% zoom. -->
 <window type="dialog" id="14001">
     <defaultcontrol always="true">3001</defaultcontrol>
     <coordinates>
@@ -10,80 +12,130 @@
     </coordinates>
     <controls>
         <control type="group">
-            <posx>1060</posx>
-            <posy>536</posy>
-            <width>200</width>
-            <height>82</height>
+            <posx>0</posx>
+            <posy>0</posy>
 
             <animation effect="slide" start="32,0" end="0,0" time="260" tween="cubic" easing="out">WindowOpen</animation>
             <animation effect="fade" start="0" end="100" time="260">WindowOpen</animation>
             <animation effect="slide" start="0,0" end="32,0" time="200" tween="cubic" easing="in">WindowClose</animation>
             <animation effect="fade" start="100" end="0" time="200">WindowClose</animation>
 
-            <!-- Watch pill (top) -->
-            <control type="image" id="3023">
-                <posx>1</posx>
-                <posy>2</posy>
-                <width>200</width>
-                <height>38</height>
-                <aspectratio>stretch</aspectratio>
-                <texture colordiffuse="55000000" border="12">rounded_rect.png</texture>
-            </control>
-            <control type="image" id="3024">
-                <posx>0</posx>
-                <posy>0</posy>
-                <width>200</width>
-                <height>38</height>
-                <aspectratio>stretch</aspectratio>
-                <texture colordiffuse="FFF8F8F8" border="12">rounded_rect.png</texture>
-            </control>
-            <control type="button" id="3002">
-                <posx>0</posx>
-                <posy>0</posy>
-                <width>200</width>
-                <height>38</height>
-                <align>center</align>
-                <aligny>center</aligny>
-                <font>font12</font>
-                <textcolor>FF111111</textcolor>
-                <focusedcolor>FF000000</focusedcolor>
-                <texturefocus colordiffuse="FFFFFFFF" border="12">rounded_rect.png</texturefocus>
-                <texturenofocus colordiffuse="FFF8F8F8" border="12">rounded_rect.png</texturenofocus>
-                <ondown>3001</ondown>
-                <label>Watch intro</label>
+            <!-- Watch pill (left) -->
+            <control type="group">
+                <posx>831</posx>
+                <posy>581</posy>
+                <width>187</width>
+                <height>37</height>
+                <animation effect="zoom" center="auto" start="100" end="104" time="120" tween="sine" easing="out" condition="Control.HasFocus(3002)">Conditional</animation>
+
+                <control type="image" id="3023">
+                    <posx>1</posx>
+                    <posy>3</posy>
+                    <width>187</width>
+                    <height>37</height>
+                    <aspectratio>stretch</aspectratio>
+                    <texture colordiffuse="66000000" border="10">rounded_rect.png</texture>
+                </control>
+                <control type="image" id="3025">
+                    <posx>-3</posx>
+                    <posy>-3</posy>
+                    <width>193</width>
+                    <height>43</height>
+                    <aspectratio>stretch</aspectratio>
+                    <texture colordiffuse="CCFFFFFF" border="14">rounded_rect.png</texture>
+                    <visible>Control.HasFocus(3002)</visible>
+                </control>
+                <control type="image" id="3024">
+                    <posx>0</posx>
+                    <posy>0</posy>
+                    <width>187</width>
+                    <height>37</height>
+                    <aspectratio>stretch</aspectratio>
+                    <texture colordiffuse="B3FFFFFF" border="10">rounded_rect.png</texture>
+                </control>
+                <control type="image" id="3026">
+                    <posx>0</posx>
+                    <posy>0</posy>
+                    <width>187</width>
+                    <height>37</height>
+                    <aspectratio>stretch</aspectratio>
+                    <texture colordiffuse="FFFFFFFF" border="10">rounded_rect.png</texture>
+                    <visible>Control.HasFocus(3002)</visible>
+                </control>
+                <control type="button" id="3002">
+                    <posx>0</posx>
+                    <posy>0</posy>
+                    <width>187</width>
+                    <height>37</height>
+                    <align>center</align>
+                    <aligny>center</aligny>
+                    <font>font16</font>
+                    <textcolor>FF111111</textcolor>
+                    <focusedcolor>FF111111</focusedcolor>
+                    <texturefocus colordiffuse="FFFFFFFF" border="10">rounded_rect.png</texturefocus>
+                    <texturenofocus colordiffuse="B3FFFFFF" border="10">rounded_rect.png</texturenofocus>
+                    <onright>3001</onright>
+                    <label>Watch intro</label>
+                </control>
             </control>
 
-            <!-- Skip pill (bottom, pinned to single-button position) -->
-            <control type="image" id="3013">
-                <posx>1</posx>
-                <posy>46</posy>
-                <width>200</width>
-                <height>38</height>
-                <aspectratio>stretch</aspectratio>
-                <texture colordiffuse="55000000" border="12">rounded_rect.png</texture>
-            </control>
-            <control type="image" id="3014">
-                <posx>0</posx>
-                <posy>44</posy>
-                <width>200</width>
-                <height>38</height>
-                <aspectratio>stretch</aspectratio>
-                <texture colordiffuse="FFF8F8F8" border="12">rounded_rect.png</texture>
-            </control>
-            <control type="button" id="3001">
-                <posx>0</posx>
-                <posy>44</posy>
-                <width>200</width>
-                <height>38</height>
-                <align>center</align>
-                <aligny>center</aligny>
-                <font>font12</font>
-                <textcolor>FF111111</textcolor>
-                <focusedcolor>FF000000</focusedcolor>
-                <texturefocus colordiffuse="FFFFFFFF" border="12">rounded_rect.png</texturefocus>
-                <texturenofocus colordiffuse="FFF8F8F8" border="12">rounded_rect.png</texturenofocus>
-                <onup>3002</onup>
-                <label>Skip intro</label>
+            <!-- Skip pill (right, pinned to single-button position) -->
+            <control type="group">
+                <posx>1029</posx>
+                <posy>581</posy>
+                <width>187</width>
+                <height>37</height>
+                <animation effect="zoom" center="auto" start="100" end="104" time="120" tween="sine" easing="out" condition="Control.HasFocus(3001)">Conditional</animation>
+
+                <control type="image" id="3013">
+                    <posx>1</posx>
+                    <posy>3</posy>
+                    <width>187</width>
+                    <height>37</height>
+                    <aspectratio>stretch</aspectratio>
+                    <texture colordiffuse="66000000" border="10">rounded_rect.png</texture>
+                </control>
+                <control type="image" id="3015">
+                    <posx>-3</posx>
+                    <posy>-3</posy>
+                    <width>193</width>
+                    <height>43</height>
+                    <aspectratio>stretch</aspectratio>
+                    <texture colordiffuse="CCFFFFFF" border="14">rounded_rect.png</texture>
+                    <visible>Control.HasFocus(3001)</visible>
+                </control>
+                <control type="image" id="3014">
+                    <posx>0</posx>
+                    <posy>0</posy>
+                    <width>187</width>
+                    <height>37</height>
+                    <aspectratio>stretch</aspectratio>
+                    <texture colordiffuse="B3FFFFFF" border="10">rounded_rect.png</texture>
+                </control>
+                <control type="image" id="3016">
+                    <posx>0</posx>
+                    <posy>0</posy>
+                    <width>187</width>
+                    <height>37</height>
+                    <aspectratio>stretch</aspectratio>
+                    <texture colordiffuse="FFFFFFFF" border="10">rounded_rect.png</texture>
+                    <visible>Control.HasFocus(3001)</visible>
+                </control>
+                <control type="button" id="3001">
+                    <posx>0</posx>
+                    <posy>0</posy>
+                    <width>187</width>
+                    <height>37</height>
+                    <align>center</align>
+                    <aligny>center</aligny>
+                    <font>font16</font>
+                    <textcolor>FF111111</textcolor>
+                    <focusedcolor>FF111111</focusedcolor>
+                    <texturefocus colordiffuse="FFFFFFFF" border="10">rounded_rect.png</texturefocus>
+                    <texturenofocus colordiffuse="B3FFFFFF" border="10">rounded_rect.png</texturenofocus>
+                    <onleft>3002</onleft>
+                    <label>Skip intro</label>
+                </control>
             </control>
         </control>
     </controls>
