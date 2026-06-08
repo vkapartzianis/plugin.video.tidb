@@ -36,7 +36,7 @@
                 <width>187</width>
                 <height>37</height>
                 <aspectratio>stretch</aspectratio>
-                <texture colordiffuse="B3FFFFFF" border="10">rounded_rect.png</texture>
+                <texture colordiffuse="C6FFFFFF" border="10">rounded_rect.png</texture>
             </control>
             <control type="image" id="3006">
                 <posx>0</posx>
@@ -59,7 +59,7 @@
                 <textcolor>FF111111</textcolor>
                 <focusedcolor>FF111111</focusedcolor>
                 <texturefocus colordiffuse="FFFFFFFF" border="10">rounded_rect.png</texturefocus>
-                <texturenofocus colordiffuse="B3FFFFFF" border="10">rounded_rect.png</texturenofocus>
+                <texturenofocus colordiffuse="C6FFFFFF" border="10">rounded_rect.png</texturenofocus>
                 <label>Skip intro</label>
             </control>
         </control>

@@ -42,7 +42,7 @@
                     <width>187</width>
                     <height>37</height>
                     <aspectratio>stretch</aspectratio>
-                    <texture colordiffuse="B3FFFFFF" border="10">rounded_rect.png</texture>
+                    <texture colordiffuse="C6FFFFFF" border="10">rounded_rect.png</texture>
                 </control>
                 <control type="image" id="3026">
                     <posx>0</posx>
@@ -64,7 +64,7 @@
                     <textcolor>FF111111</textcolor>
                     <focusedcolor>FF111111</focusedcolor>
                     <texturefocus colordiffuse="FFFFFFFF" border="10">rounded_rect.png</texturefocus>
-                    <texturenofocus colordiffuse="B3FFFFFF" border="10">rounded_rect.png</texturenofocus>
+                    <texturenofocus colordiffuse="C6FFFFFF" border="10">rounded_rect.png</texturenofocus>
                     <onright>3001</onright>
                     <label>Watch intro</label>
                 </control>
@@ -92,7 +92,7 @@
                     <width>187</width>
                     <height>37</height>
                     <aspectratio>stretch</aspectratio>
-                    <texture colordiffuse="B3FFFFFF" border="10">rounded_rect.png</texture>
+                    <texture colordiffuse="C6FFFFFF" border="10">rounded_rect.png</texture>
                 </control>
                 <control type="image" id="3016">
                     <posx>0</posx>
@@ -114,7 +114,7 @@
                     <textcolor>FF111111</textcolor>
                     <focusedcolor>FF111111</focusedcolor>
                     <texturefocus colordiffuse="FFFFFFFF" border="10">rounded_rect.png</texturefocus>
-                    <texturenofocus colordiffuse="B3FFFFFF" border="10">rounded_rect.png</texturenofocus>
+                    <texturenofocus colordiffuse="C6FFFFFF" border="10">rounded_rect.png</texturenofocus>
                     <onleft>3002</onleft>
                     <label>Skip intro</label>
                 </control>

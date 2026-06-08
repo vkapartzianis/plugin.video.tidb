@@ -39,7 +39,7 @@
                 <width>280</width>
                 <height>56</height>
                 <aspectratio>stretch</aspectratio>
-                <texture colordiffuse="B3FFFFFF" border="14">rounded_rect.png</texture>
+                <texture colordiffuse="C6FFFFFF" border="14">rounded_rect.png</texture>
             </control>
             <!-- Focus fill: solid white (only while focused) -->
             <control type="image" id="3006">
@@ -63,7 +63,7 @@
                 <textcolor>FF111111</textcolor>
                 <focusedcolor>FF111111</focusedcolor>
                 <texturefocus colordiffuse="FFFFFFFF" border="14">rounded_rect.png</texturefocus>
-                <texturenofocus colordiffuse="B3FFFFFF" border="14">rounded_rect.png</texturenofocus>
+                <texturenofocus colordiffuse="C6FFFFFF" border="14">rounded_rect.png</texturenofocus>
                 <label>Skip intro</label>
             </control>
         </control>
