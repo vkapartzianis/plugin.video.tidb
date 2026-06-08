@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Skip/Watch choice shown while the OSD is up mid-segment. Skip pill is pinned
+     at the same spot as the single-button overlay (posy 880); Watch sits above it.
+     Texture paths are also set from Python onInit for reliable load. -->
+<window type="dialog" id="14001">
+    <defaultcontrol always="true">3001</defaultcontrol>
+    <coordinates>
+        <system>1</system>
+        <posx>0</posx>
+        <posy>0</posy>
+    </coordinates>
+    <controls>
+        <control type="group">
+            <posx>1610</posx>
+            <posy>824</posy>
+            <width>260</width>
+            <height>104</height>
+
+            <animation effect="slide" start="40,0" end="0,0" time="260" tween="cubic" easing="out">WindowOpen</animation>
+            <animation effect="fade" start="0" end="100" time="260">WindowOpen</animation>
+            <animation effect="slide" start="0,0" end="40,0" time="200" tween="cubic" easing="in">WindowClose</animation>
+            <animation effect="fade" start="100" end="0" time="200">WindowClose</animation>
+
+            <!-- Watch pill (top) -->
+            <control type="image" id="3023">
+                <posx>1</posx>
+                <posy>2</posy>
+                <width>260</width>
+                <height>48</height>
+                <aspectratio>stretch</aspectratio>
+                <texture colordiffuse="55000000" border="14">rounded_rect.png</texture>
+            </control>
+            <control type="image" id="3024">
+                <posx>0</posx>
+                <posy>0</posy>
+                <width>260</width>
+                <height>48</height>
+                <aspectratio>stretch</aspectratio>
+                <texture colordiffuse="FFF8F8F8" border="14">rounded_rect.png</texture>
+            </control>
+            <control type="button" id="3002">
+                <posx>0</posx>
+                <posy>0</posy>
+                <width>260</width>
+                <height>48</height>
+                <align>center</align>
+                <aligny>center</aligny>
+                <font>font20</font>
+                <textcolor>FF111111</textcolor>
+                <focusedcolor>FF000000</focusedcolor>
+                <texturefocus colordiffuse="FFFFFFFF" border="14">rounded_rect.png</texturefocus>
+                <texturenofocus colordiffuse="FFF8F8F8" border="14">rounded_rect.png</texturenofocus>
+                <ondown>3001</ondown>
+                <label>Watch intro</label>
+            </control>
+
+            <!-- Skip pill (bottom, pinned to single-button position) -->
+            <control type="image" id="3013">
+                <posx>1</posx>
+                <posy>58</posy>
+                <width>260</width>
+                <height>48</height>
+                <aspectratio>stretch</aspectratio>
+                <texture colordiffuse="55000000" border="14">rounded_rect.png</texture>
+            </control>
+            <control type="image" id="3014">
+                <posx>0</posx>
+                <posy>56</posy>
+                <width>260</width>
+                <height>48</height>
+                <aspectratio>stretch</aspectratio>
+                <texture colordiffuse="FFF8F8F8" border="14">rounded_rect.png</texture>
+            </control>
+            <control type="button" id="3001">
+                <posx>0</posx>
+                <posy>56</posy>
+                <width>260</width>
+                <height>48</height>
+                <align>center</align>
+                <aligny>center</aligny>
+                <font>font20</font>
+                <textcolor>FF111111</textcolor>
+                <focusedcolor>FF000000</focusedcolor>
+                <texturefocus colordiffuse="FFFFFFFF" border="14">rounded_rect.png</texturefocus>
+                <texturenofocus colordiffuse="FFF8F8F8" border="14">rounded_rect.png</texturenofocus>
+                <onup>3002</onup>
+                <label>Skip intro</label>
+            </control>
+        </control>
+    </controls>
+</window>

@@ -51,6 +51,18 @@ def _debug_logging() -> bool:
     return ADDON.getSetting('debug_logging') == 'true'
 
 
+# Kodi's playback OSD (control bar). Visibility is independent of input focus,
+# so this stays true while it's on screen even though our dialog is modal.
+_OSD_VISIBLE_CONDITION = 'Window.IsVisible(videoosd)'
+
+
+def _osd_visible() -> bool:
+    try:
+        return bool(xbmc.getCondVisibility(_OSD_VISIBLE_CONDITION))
+    except Exception:
+        return False
+
+
 # ── Playback session state ────────────────────────────────────────────────
 
 class PlaybackSession:
@@ -160,6 +172,10 @@ def _handle_segment(segment: Dict[str, Any], segment_idx: int, player: TIDBPlaye
 
     if not _should_show_segment_button(session.processed_segments, segment_key,
                                        current_time, api_start, api_end):
+        # Start prompt already shown (or we're outside the segment). If the OSD
+        # is up while we're still inside, show the Skip/Watch choice on top.
+        _maybe_show_dual(segment, segment_idx, player, monitor, session,
+                         filename, api_start, api_end, is_next_ep)
         return None
 
     if not player.isPlaying():
@@ -205,7 +221,74 @@ def _handle_segment(segment: Dict[str, Any], segment_idx: int, player: TIDBPlaye
         _debug_osd('Skipped {} to {:.1f}s'.format(segment_name, api_end))
     else:
         xbmc.log('[TheIntroDB] User did NOT skip {}'.format(segment_name), xbmc.LOGINFO)
+        # Start prompt timed out without a skip. If the OSD is up right now and
+        # we're still inside, transition immediately to the Skip/Watch choice.
+        _maybe_show_dual(segment, segment_idx, player, monitor, session,
+                         filename, api_start, api_end, is_next_ep)
     return None
+
+
+def _maybe_show_dual(segment: Dict[str, Any], segment_idx: int, player: TIDBPlayer, monitor: xbmc.Monitor,
+                     session: PlaybackSession, filename: str, api_start: float, api_end: float,
+                     is_next_ep: bool) -> None:
+    """Show the two-button Skip/Watch dialog while the OSD is up mid-segment.
+
+    The dialog mirrors the OSD: it stays while the OSD is visible and re-appears
+    each time the OSD re-opens. Suppressed for the rest of the segment entry only
+    if the user chose "Watch"; only "Skip" seeks. Used both for the immediate
+    single->dual transition (after the start prompt) and for later OSD re-opens.
+    """
+    segment_type = segment['type']
+    # Next-episode segments use their own promotion flow; auto-skip needs no button.
+    if is_next_ep or _fresh_bool('auto_skip_{}'.format(segment_type)):
+        return
+    if not player.isPlaying() or not _osd_visible():
+        return
+
+    # Re-evaluate position: the start prompt may have run for several seconds.
+    try:
+        current_time = player.getTime()
+    except Exception:
+        return
+    margin = 0.25
+    if not (api_start <= current_time < (api_end - margin)):
+        return
+
+    segment_key = '{}_{}'.format(segment_type, segment_idx)
+    state = session.processed_segments.get(segment_key)
+    if not state or state.get('watch_dismissed'):
+        return
+
+    xbmc.log('[TheIntroDB] OSD up during {} — showing Skip/Watch choice'.format(segment_type),
+             xbmc.LOGINFO)
+    result = overlay_mod.show_skip_choice_overlay(
+        intro_end=api_end,
+        player=player,
+        monitor=monitor,
+        segment_type=segment_type,
+        segment_index=segment_idx,
+    )
+
+    segment_names = {
+        'intro': ADDON.getLocalizedString(STR_SKIP_INTRO),
+        'recap': ADDON.getLocalizedString(STR_SKIP_RECAP),
+        'credits': ADDON.getLocalizedString(STR_SKIP_CREDITS),
+        'preview': ADDON.getLocalizedString(STR_SKIP_PREVIEW),
+    }
+    segment_name = segment_names.get(segment_type, segment_type.title())
+
+    if result == 'skip':
+        xbmc.log('[TheIntroDB] User pressed Skip {} (OSD choice)'.format(segment_name), xbmc.LOGINFO)
+        skipper.execute_skip(player, api_start, api_end, filename, segment_type)
+        if REPORTER:
+            REPORTER.track('segment_skipped', {'segment_type': segment_type})
+        _debug_osd('Skipped {} to {:.1f}s'.format(segment_name, api_end))
+    elif result == 'watch':
+        state['watch_dismissed'] = True
+        xbmc.log('[TheIntroDB] User chose Watch {} — suppressing for this entry'.format(segment_name),
+                 xbmc.LOGINFO)
+    # 'closed' (OSD hid / intro ended / stopped): leave watch_dismissed False so
+    # the dialog can re-appear when the OSD next opens.
 
 
 def _handle_next_episode(player: TIDBPlayer, monitor: xbmc.Monitor, session: PlaybackSession, api_end: float, segment_type: str, segment_idx: int) -> Optional[str]:
@@ -501,6 +584,7 @@ def _should_show_segment_button(processed_segments: Dict[str, Dict[str, Any]], s
     state = processed_segments.setdefault(segment_key, {
         'inside': False,
         'shown_for_entry': False,
+        'watch_dismissed': False,
         'last_time': None,
     })
 
@@ -510,6 +594,7 @@ def _should_show_segment_button(processed_segments: Dict[str, Dict[str, Any]], s
     if not inside_segment:
         state['inside'] = False
         state['shown_for_entry'] = False
+        state['watch_dismissed'] = False
         state['last_time'] = current_time
         return False
 
@@ -522,6 +607,7 @@ def _should_show_segment_button(processed_segments: Dict[str, Dict[str, Any]], s
             xbmc.log('[TheIntroDB] Entry detected for {} at {:.1f}s'.format(
                 segment_key, current_time), xbmc.LOGINFO)
         state['shown_for_entry'] = False
+        state['watch_dismissed'] = False
 
     state['inside'] = True
     state['last_time'] = current_time
