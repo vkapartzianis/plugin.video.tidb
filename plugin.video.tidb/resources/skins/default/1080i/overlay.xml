@@ -32,16 +32,6 @@
                 <aspectratio>stretch</aspectratio>
                 <texture colordiffuse="66000000" border="14">rounded_rect.png</texture>
             </control>
-            <!-- Focus glow ring (only while focused) -->
-            <control type="image" id="3005">
-                <posx>-5</posx>
-                <posy>-5</posy>
-                <width>290</width>
-                <height>66</height>
-                <aspectratio>stretch</aspectratio>
-                <texture colordiffuse="CCFFFFFF" border="20">rounded_rect.png</texture>
-                <visible>Control.HasFocus(3001)</visible>
-            </control>
             <!-- Default fill: 70% white -->
             <control type="image" id="3004">
                 <posx>0</posx>

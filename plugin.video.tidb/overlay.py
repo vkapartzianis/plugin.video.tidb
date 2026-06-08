@@ -12,10 +12,10 @@ ADDON = xbmcaddon.Addon()
 ADDON_PATH: str = ADDON.getAddonInfo('path')
 # Must match the last argument to SkipOverlay / WindowXMLDialog (folder under resources/skins/default/).
 _OVERLAY_RES = '1080i'
-# Pill image controls (shadow, default fill, glow, focus fill). Textures are set
-# from Python by absolute path; the visible background comes from these controls,
-# not the button texture (relative button textures don't render on some platforms).
-_BG_IMAGE_IDS = (3003, 3004, 3005, 3006)
+# Pill image controls (shadow, default fill, focus fill). Textures are set from
+# Python by absolute path; the visible background comes from these controls, not
+# the button texture (relative button textures don't render on some platforms).
+_BG_IMAGE_IDS = (3003, 3004, 3006)
 
 # String IDs for localization
 STR_SKIP_INTRO = 32001
@@ -283,8 +283,8 @@ def _wait_for_playback_clock(player: Optional[xbmc.Player], monitor: xbmc.Monito
 CHOICE_WINDOW_ID = 14001
 SKIP_BUTTON_ID = 3001
 WATCH_BUTTON_ID = 3002
-# Per pill: shadow, default fill, glow, focus fill (skip 3013-3016 / watch 3023-3026).
-_CHOICE_IMAGE_IDS = (3013, 3014, 3015, 3016, 3023, 3024, 3025, 3026)
+# Per pill: shadow, default fill, focus fill (skip 3013/3014/3016 / watch 3023/3024/3026).
+_CHOICE_IMAGE_IDS = (3013, 3014, 3016, 3023, 3024, 3026)
 
 
 class SkipChoiceOverlay(xbmcgui.WindowXMLDialog):

@@ -37,15 +37,6 @@
                     <aspectratio>stretch</aspectratio>
                     <texture colordiffuse="66000000" border="14">rounded_rect.png</texture>
                 </control>
-                <control type="image" id="3025">
-                    <posx>-5</posx>
-                    <posy>-5</posy>
-                    <width>290</width>
-                    <height>66</height>
-                    <aspectratio>stretch</aspectratio>
-                    <texture colordiffuse="CCFFFFFF" border="20">rounded_rect.png</texture>
-                    <visible>Control.HasFocus(3002)</visible>
-                </control>
                 <control type="image" id="3024">
                     <posx>0</posx>
                     <posy>0</posy>
@@ -95,15 +86,6 @@
                     <height>56</height>
                     <aspectratio>stretch</aspectratio>
                     <texture colordiffuse="66000000" border="14">rounded_rect.png</texture>
-                </control>
-                <control type="image" id="3015">
-                    <posx>-5</posx>
-                    <posy>-5</posy>
-                    <width>290</width>
-                    <height>66</height>
-                    <aspectratio>stretch</aspectratio>
-                    <texture colordiffuse="CCFFFFFF" border="20">rounded_rect.png</texture>
-                    <visible>Control.HasFocus(3001)</visible>
                 </control>
                 <control type="image" id="3014">
                     <posx>0</posx>
