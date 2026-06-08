@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="plugin.video.tidb"
-       name="TheIntroDB Kodi Addon"
+<addon id="plugin.video.tidb.kine"
+       name="TheIntroDB Kine Addon"
        version="1.6.0"
        provider-name="TheIntroDB">
     <requires>
@@ -8,7 +8,7 @@
     </requires>
     <extension point="xbmc.service" library="service.py" start="startup"/>
     <extension point="xbmc.addon.metadata">
-        <path>plugin.video.tidb-1.6.0.zip</path>
+        <path>plugin.video.tidb.kine-1.6.0.zip</path>
         <summary lang="en_GB">Skip intro, recap, credits, and preview segments in movies and TV shows using TheIntroDB</summary>
         <description lang="en_GB">Looks up segment timings from TheIntroDB while you watch. Uses TMDB ids when present; otherwise IMDb ids (tt…) with season/episode.</description>
         <platform>all</platform>

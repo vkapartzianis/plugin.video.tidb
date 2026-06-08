@@ -31,9 +31,6 @@ jobs:
       run: awk '/export-ignore/ { print $1 }' .gitattributes | xargs rm -rf --
       working-directory: ${{ github.repository }}
       continue-on-error: true
-    - name: Run kodi-addon-checker on repository
-      run: $HOME/.local/bin/kodi-addon-checker --branch=main ${{ github.repository }}/repository.tidb.repo/
-      continue-on-error: true
     - name: Run kodi-addon-checker on main addon
-      run: $HOME/.local/bin/kodi-addon-checker --branch=main ${{ github.repository }}/plugin.video.tidb/
+      run: $HOME/.local/bin/kodi-addon-checker --branch=main ${{ github.repository }}/plugin.video.tidb.kine/
       continue-on-error: true

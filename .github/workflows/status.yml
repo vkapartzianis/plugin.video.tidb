@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PYTHONIOENCODING: utf-8
-      PYTHONPATH: ${{ github.workspace }}/plugin.video.tidb/resources/lib:${{ github.workspace }}/tests
+      PYTHONPATH: ${{ github.workspace }}/plugin.video.tidb.kine/resources/lib:${{ github.workspace }}/tests
     steps:
     - name: Check out ${{ github.sha }} from repository ${{ github.repository }}
       uses: actions/checkout@v4
@@ -32,7 +32,7 @@ jobs:
       run: |
         python -c "
         import sys
-        sys.path.insert(0, 'plugin.video.tidb/resources/lib')
+        sys.path.insert(0, 'plugin.video.tidb.kine/resources/lib')
         try:
             # Test basic imports
             import service
@@ -45,7 +45,7 @@ jobs:
     - name: TEST Repository structure
       run: |
         # Check that required files exist
-        for file in repository.tidb.repo/addon.xml plugin.video.tidb/addon.xml; do
+        for file in plugin.video.tidb.kine/addon.xml; do
           if [ ! -f "$file" ]; then
             echo "Missing required file: $file"
             exit 1
@@ -54,7 +54,7 @@ jobs:
         done
         
         # Validate XML files
-        for file in repository.tidb.repo/addon.xml plugin.video.tidb/addon.xml; do
+        for file in plugin.video.tidb.kine/addon.xml; do
           if command -v xmllint >/dev/null 2>&1; then
             xmllint --noout "$file" || echo "XML validation failed for $file"
           fi

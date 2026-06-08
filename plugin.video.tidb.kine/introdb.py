@@ -64,7 +64,7 @@ def _do_request(url: str, api_key: str) -> Optional[Dict[str, Any]]:
     global _rate_limit_until
     req = Request(url)
     req.add_header('Accept', 'application/json')
-    req.add_header('User-Agent', 'TheIntroDB Kodi Addon/1.0')
+    req.add_header('User-Agent', 'TheIntroDB Kine Addon/1.0')
     if api_key:
         req.add_header('Authorization', 'Bearer {}'.format(api_key))
 
@@ -443,7 +443,7 @@ def submit_segment(tmdb_id: Optional[Union[str, int]] = None, imdb_id: Optional[
     req = Request(url, data=body_bytes, method='POST')
     req.add_header('Content-Type', 'application/json')
     req.add_header('Accept', 'application/json')
-    req.add_header('User-Agent', 'TheIntroDB Kodi Addon/1.0')
+    req.add_header('User-Agent', 'TheIntroDB Kine Addon/1.0')
     req.add_header('Authorization', 'Bearer {}'.format(api_key))
 
     global _rate_limit_until
