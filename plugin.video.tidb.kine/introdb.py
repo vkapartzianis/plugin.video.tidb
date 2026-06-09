@@ -19,6 +19,11 @@ API_BASE = 'https://api.theintrodb.org/v3'
 # shape (one object per type, 'outro' instead of 'credits', no 'preview').
 API_BASE_FALLBACK = 'https://api.introdb.app'
 SEGMENT_TYPES = ('intro', 'recap', 'credits', 'preview')
+# TMDb is used only to resolve a TV show's IMDb id when TheIntroDB has no data and
+# Kodi exposed no IMDb id, so the IMDb-only IntroDB.app fallback can still run.
+TMDB_API_BASE = 'https://api.themoviedb.org/3'
+TMDB_API_KEY = '5b6ab2d01b48b2149e3460be886dcb72'
+_tmdb_imdb_cache = {}  # type: Dict[str, Optional[str]]  # tmdb show id -> imdb id / None
 MIN_REQUEST_GAP = 0.4  # small gap between requests
 _last_request_time = 0.0
 _rate_limit_until = 0.0
@@ -331,17 +336,65 @@ def _query_fallback(imdb_id, season, episode, is_movie) -> Optional[Dict[str, An
     return normalized
 
 
+def _resolve_imdb_from_tmdb(tmdb_id: Union[str, int]) -> Optional[str]:
+    """Resolve a TV show's TMDb id to its IMDb id via the TMDb API.
+
+    Last resort so the IMDb-only IntroDB.app fallback can run for titles where
+    Kodi exposed no IMDb id. Cached (both hits and misses) for the service
+    lifetime. Returns a 'tt…' id or None. Not gated by the TheIntroDB rate
+    limiter — TMDb is a separate host and this fires at most once per show.
+    """
+    tid = str(tmdb_id).strip()
+    if tid in _tmdb_imdb_cache:
+        return _tmdb_imdb_cache[tid]
+
+    imdb = None
+    url = '{}/tv/{}/external_ids?api_key={}'.format(TMDB_API_BASE, tid, TMDB_API_KEY)
+    xbmc.log('[TheIntroDB] TMDb external_ids lookup for tv/{}'.format(tid), xbmc.LOGINFO)
+    try:
+        req = Request(url)
+        req.add_header('Accept', 'application/json')
+        req.add_header('User-Agent', 'TheIntroDB Kine Addon/1.0')
+        resp = urlopen(req, timeout=8)
+        data = json.loads(resp.read().decode('utf-8'))
+        candidate = data.get('imdb_id') if isinstance(data, dict) else None
+        if candidate and str(candidate).startswith('tt'):
+            imdb = str(candidate)
+            xbmc.log('[TheIntroDB] TMDb resolved tv/{} -> {}'.format(tid, imdb), xbmc.LOGINFO)
+        else:
+            xbmc.log('[TheIntroDB] TMDb has no IMDb id for tv/{}'.format(tid), xbmc.LOGINFO)
+    except HTTPError as e:
+        xbmc.log('[TheIntroDB] TMDb HTTP {}'.format(e.code), xbmc.LOGWARNING)
+    except URLError as e:
+        xbmc.log('[TheIntroDB] TMDb network error: {}'.format(e.reason), xbmc.LOGWARNING)
+    except Exception as e:
+        xbmc.log('[TheIntroDB] TMDb lookup failed: {}'.format(e), xbmc.LOGERROR)
+
+    _tmdb_imdb_cache[tid] = imdb
+    return imdb
+
+
 def _request_media(tmdb_id: Optional[Union[str, int]], imdb_id: Optional[str], season: Optional[Union[str, int]], episode: Optional[Union[str, int]], is_movie: bool, duration_ms: Optional[Union[str, int]], want_types: Tuple[str, ...]) -> Optional[Dict[str, Any]]:
     """Fetch segment data for a title.
 
     Queries TheIntroDB first; if it has none of ``want_types``, falls back to
-    IntroDB.app (TV episodes by IMDb id). Returns whatever data has the wanted
-    segments, else any valid-but-empty response, else None."""
+    IntroDB.app (TV episodes by IMDb id). When Kodi exposed no IMDb id, the
+    show's IMDb id is resolved from its TMDb id so the fallback can still run.
+    Returns whatever data has the wanted segments, else any valid-but-empty
+    response, else None."""
     data = _query_primary(tmdb_id, imdb_id, season, episode, is_movie, duration_ms)
     if data and any(data.get(t) for t in want_types):
         return data
 
-    fallback = _query_fallback(imdb_id, season, episode, is_movie)
+    # IntroDB.app is IMDb-only. If we have no IMDb id but do have a TMDb id for a
+    # TV episode, resolve the show's IMDb id from TMDb before trying the fallback.
+    fb_imdb = imdb_id
+    if not is_movie and not _normalize_imdb(fb_imdb) and tmdb_id and _valid_tmdb(tmdb_id):
+        s, e = _episode_nums(season, episode)
+        if s is not None and e is not None and s > 0 and e > 0:
+            fb_imdb = _resolve_imdb_from_tmdb(tmdb_id)
+
+    fallback = _query_fallback(fb_imdb, season, episode, is_movie)
     if fallback and any(fallback.get(t) for t in want_types):
         xbmc.log('[TheIntroDB] Using IntroDB.app fallback data', xbmc.LOGINFO)
         return fallback

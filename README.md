@@ -61,6 +61,7 @@ TheIntroDB Kine Addon includes a few settings to adjust behavior:
 
 - **TheIntroDB** — database and API: [theintrodb.org](https://theintrodb.org) · [github.com/TheIntroDB](https://github.com/TheIntroDB)
 - **JZOnTheGit** — original addon creator: [github.com/JZOnTheGit](https://github.com/JZOnTheGit)
+- <img src="https://github.com/user-attachments/assets/8e01ae1f-9c57-499f-a513-de6fd9ea97d8" alt="TMDB" height="11"> — This product uses the TMDB API but is not endorsed or certified by TMDB.
 
 ## License
 
