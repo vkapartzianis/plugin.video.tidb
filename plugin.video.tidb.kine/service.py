@@ -29,26 +29,52 @@ STR_SUBMIT_FAILED = 32023
 SUBMIT_WINDOW_SECS = 300.0  # first 5 minutes
 
 
+# ── Settings cache ────────────────────────────────────────────────────────
+# Reading a setting used to build a fresh xbmcaddon.Addon() on every call
+# (once per second in the main loop) so GUI edits applied without a restart.
+# Instead we cache values in memory and clear the cache when Kodi notifies us
+# of a change, so edits still apply live but the hot path stays cheap.
+
+_settings_cache = {}  # type: Dict[str, str]
+
+
+def _cached_setting(key: str) -> str:
+    try:
+        return _settings_cache[key]
+    except KeyError:
+        pass
+    try:
+        value = xbmcaddon.Addon(_ADDON_ID).getSetting(key)
+    except Exception:
+        value = ADDON.getSetting(key)
+    _settings_cache[key] = value
+    return value
+
+
+def _invalidate_settings_cache() -> None:
+    _settings_cache.clear()
+
+
 class TIDBMonitor(xbmc.Monitor):
-    pass
+    def onSettingsChanged(self) -> None:
+        # Kodi has already persisted the new values; drop the cache so the next
+        # read re-fetches them. Fires on a separate thread from the main loop.
+        _invalidate_settings_cache()
 
 
 def _debug_osd(message: str) -> None:
     # optional toast spam for debugging
-    if ADDON.getSetting('debug_osd') == 'true':
+    if _cached_setting('debug_osd') == 'true':
         xbmc.executebuiltin('Notification(TIDB, {}, 1500)'.format(message))
 
 
 def _fresh_bool(key: str) -> bool:
-    # read setting again from disk so gui changes apply without restart
-    try:
-        return xbmcaddon.Addon(_ADDON_ID).getSetting(key) == 'true'
-    except Exception:
-        return ADDON.getSetting(key) == 'true'
+    # served from the cache; refreshed on Monitor.onSettingsChanged
+    return _cached_setting(key) == 'true'
 
 
 def _debug_logging() -> bool:
-    return ADDON.getSetting('debug_logging') == 'true'
+    return _cached_setting('debug_logging') == 'true'
 
 
 # Kodi's playback OSD (control bar). Visibility is independent of input focus,
@@ -368,10 +394,7 @@ def _should_offer_submit(session: PlaybackSession, is_paused: bool, all_segments
         if is_paused and not session.submit_prompted_this_pause:
             xbmc.log('[TheIntroDB] Submit blocked: enable_submissions is off', xbmc.LOGINFO)
         return False
-    try:
-        api_key = (xbmcaddon.Addon(_ADDON_ID).getSetting('introdb_api_key') or '').strip()
-    except Exception:
-        api_key = (ADDON.getSetting('introdb_api_key') or '').strip()
+    api_key = (_cached_setting('introdb_api_key') or '').strip()
     if not api_key:
         if is_paused and not session.submit_prompted_this_pause:
             xbmc.log('[TheIntroDB] Submit blocked: no API key configured', xbmc.LOGINFO)
@@ -524,7 +547,7 @@ def _run_service() -> None:
 
         introdb_on = _fresh_bool('introdb_enabled')
         if _debug_logging():
-            _raw = xbmcaddon.Addon(_ADDON_ID).getSetting('introdb_enabled')
+            _raw = _cached_setting('introdb_enabled')
             xbmc.log('[TheIntroDB] introdb_enabled raw={!r} lookups_on={}'.format(
                 _raw, introdb_on), xbmc.LOGINFO)
 

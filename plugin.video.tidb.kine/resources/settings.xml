@@ -1,30 +1,114 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<settings>
-    <category label="$ADDON[plugin.video.tidb.kine 32025]">
-        <setting id="skip_offset" type="number" label="$ADDON[plugin.video.tidb.kine 32011]" default="2"/>
-    </category>
-    <category label="$ADDON[plugin.video.tidb.kine 32026]">
-        <setting id="enable_intro" type="bool" label="$ADDON[plugin.video.tidb.kine 32006]" default="true"/>
-        <setting id="auto_skip_intro" type="bool" label="$ADDON[plugin.video.tidb.kine 32036]" default="false"/>
-        <setting id="enable_recap" type="bool" label="$ADDON[plugin.video.tidb.kine 32007]" default="true"/>
-        <setting id="auto_skip_recap" type="bool" label="$ADDON[plugin.video.tidb.kine 32037]" default="false"/>
-        <setting id="enable_credits" type="bool" label="$ADDON[plugin.video.tidb.kine 32008]" default="true"/>
-        <setting id="auto_skip_credits" type="bool" label="$ADDON[plugin.video.tidb.kine 32038]" default="false"/>
-        <setting id="enable_preview" type="bool" label="$ADDON[plugin.video.tidb.kine 32009]" default="true"/>
-        <setting id="auto_skip_preview" type="bool" label="$ADDON[plugin.video.tidb.kine 32039]" default="false"/>
-    </category>
-    <category label="$ADDON[plugin.video.tidb.kine 32027]">
-        <setting id="introdb_enabled" type="bool" label="$ADDON[plugin.video.tidb.kine 32031]" default="true"/>
-        <setting id="introdb_api_key" type="text" label="$ADDON[plugin.video.tidb.kine 32032]" default=""/>
-    </category>
-    <category label="$ADDON[plugin.video.tidb.kine 32028]">
-        <setting id="enable_submissions" type="bool" label="$ADDON[plugin.video.tidb.kine 32024]" default="false"/>
-    </category>
-    <category label="$ADDON[plugin.video.tidb.kine 32029]">
-        <setting id="anonymous_usage_reporting" type="bool" label="$ADDON[plugin.video.tidb.kine 32033]" default="true"/>
-    </category>
-    <category label="$ADDON[plugin.video.tidb.kine 32030]">
-        <setting id="debug_logging" type="bool" label="$ADDON[plugin.video.tidb.kine 32034]" default="false"/>
-        <setting id="debug_osd" type="bool" label="$ADDON[plugin.video.tidb.kine 32035]" default="false"/>
-    </category>
+<settings version="1">
+    <section id="plugin.video.tidb.kine">
+        <category id="general" label="32025">
+            <group id="1">
+                <setting id="skip_offset" type="integer" label="32011">
+                    <level>0</level>
+                    <default>2</default>
+                    <constraints>
+                        <minimum>0</minimum>
+                        <step>1</step>
+                        <maximum>30</maximum>
+                    </constraints>
+                    <control type="spinner" format="integer"/>
+                </setting>
+            </group>
+        </category>
+        <category id="segments" label="32026">
+            <group id="1">
+                <setting id="enable_intro" type="boolean" label="32006">
+                    <level>0</level>
+                    <default>true</default>
+                    <control type="toggle"/>
+                </setting>
+                <setting id="auto_skip_intro" type="boolean" label="32036">
+                    <level>0</level>
+                    <default>false</default>
+                    <control type="toggle"/>
+                </setting>
+                <setting id="enable_recap" type="boolean" label="32007">
+                    <level>0</level>
+                    <default>true</default>
+                    <control type="toggle"/>
+                </setting>
+                <setting id="auto_skip_recap" type="boolean" label="32037">
+                    <level>0</level>
+                    <default>false</default>
+                    <control type="toggle"/>
+                </setting>
+                <setting id="enable_credits" type="boolean" label="32008">
+                    <level>0</level>
+                    <default>true</default>
+                    <control type="toggle"/>
+                </setting>
+                <setting id="auto_skip_credits" type="boolean" label="32038">
+                    <level>0</level>
+                    <default>false</default>
+                    <control type="toggle"/>
+                </setting>
+                <setting id="enable_preview" type="boolean" label="32009">
+                    <level>0</level>
+                    <default>true</default>
+                    <control type="toggle"/>
+                </setting>
+                <setting id="auto_skip_preview" type="boolean" label="32039">
+                    <level>0</level>
+                    <default>false</default>
+                    <control type="toggle"/>
+                </setting>
+            </group>
+        </category>
+        <category id="theintrodb" label="32027">
+            <group id="1">
+                <setting id="introdb_enabled" type="boolean" label="32031">
+                    <level>0</level>
+                    <default>true</default>
+                    <control type="toggle"/>
+                </setting>
+                <setting id="introdb_api_key" type="string" label="32032">
+                    <level>0</level>
+                    <default/>
+                    <constraints>
+                        <allowempty>true</allowempty>
+                    </constraints>
+                    <control type="edit" format="string">
+                        <heading>32032</heading>
+                    </control>
+                </setting>
+            </group>
+        </category>
+        <category id="submissions" label="32028">
+            <group id="1">
+                <setting id="enable_submissions" type="boolean" label="32024">
+                    <level>0</level>
+                    <default>false</default>
+                    <control type="toggle"/>
+                </setting>
+            </group>
+        </category>
+        <category id="privacy" label="32029">
+            <group id="1">
+                <setting id="anonymous_usage_reporting" type="boolean" label="32033">
+                    <level>0</level>
+                    <default>true</default>
+                    <control type="toggle"/>
+                </setting>
+            </group>
+        </category>
+        <category id="debug" label="32030">
+            <group id="1">
+                <setting id="debug_logging" type="boolean" label="32034">
+                    <level>0</level>
+                    <default>false</default>
+                    <control type="toggle"/>
+                </setting>
+                <setting id="debug_osd" type="boolean" label="32035">
+                    <level>0</level>
+                    <default>false</default>
+                    <control type="toggle"/>
+                </setting>
+            </group>
+        </category>
+    </section>
 </settings>
