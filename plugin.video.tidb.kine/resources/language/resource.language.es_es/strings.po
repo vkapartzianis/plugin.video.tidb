@@ -146,3 +146,15 @@ msgstr "Ver créditos"
 msgctxt "#32043"
 msgid "Watch Preview"
 msgstr "Ver avance"
+
+msgctxt "#32044"
+msgid "End credits action"
+msgstr "Acción en los créditos finales"
+
+msgctxt "#32045"
+msgid "Skip to the end"
+msgstr "Saltar al final"
+
+msgctxt "#32046"
+msgid "Play next episode"
+msgstr "Reproducir el siguiente episodio"

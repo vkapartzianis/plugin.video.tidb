@@ -47,6 +47,17 @@
                     <default>false</default>
                     <control type="toggle"/>
                 </setting>
+                <setting id="end_credits_action" type="string" label="32044">
+                    <level>0</level>
+                    <default>skip_to_end</default>
+                    <constraints>
+                        <options>
+                            <option label="32045">skip_to_end</option>
+                            <option label="32046">play_next</option>
+                        </options>
+                    </constraints>
+                    <control type="list" format="string"/>
+                </setting>
                 <setting id="enable_preview" type="boolean" label="32009">
                     <level>0</level>
                     <default>true</default>

@@ -146,3 +146,15 @@ msgstr ""
 msgctxt "#32043"
 msgid "Watch Preview"
 msgstr ""
+
+msgctxt "#32044"
+msgid "End credits action"
+msgstr ""
+
+msgctxt "#32045"
+msgid "Skip to the end"
+msgstr ""
+
+msgctxt "#32046"
+msgid "Play next episode"
+msgstr ""

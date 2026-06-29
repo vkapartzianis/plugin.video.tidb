@@ -128,6 +128,15 @@ def _debug_logging() -> bool:
     return _cached_setting('debug_logging') == 'true'
 
 
+# What to do at open-ended end credits: 'skip_to_end' (default) or 'play_next'.
+_END_CREDITS_ACTIONS = ('skip_to_end', 'play_next')
+
+
+def _end_credits_action() -> str:
+    val = (_cached_setting('end_credits_action') or '').strip()
+    return val if val in _END_CREDITS_ACTIONS else 'skip_to_end'
+
+
 # Kodi's playback OSD (control bar). Visibility is independent of input focus,
 # so this stays true while it's on screen even though our dialog is modal.
 _OSD_VISIBLE_CONDITION = 'Window.IsVisible(videoosd)'
@@ -356,11 +365,16 @@ def _resolve_segment_bounds(segment: Dict[str, Any], player: TIDBPlayer) -> Opti
     if api_start is None:
         api_start = 0
 
-    is_next_ep = segment['type'] in ('credits', 'preview') and api_end is None
+    seg_type = segment['type']
+    # end_credits_action determines what skipping a credits or preview segment
+    # always does, regardless of whether the DB gave an end time: skip to the
+    # end (default) or play the next episode.
+    is_next_ep = seg_type in ('credits', 'preview') and _end_credits_action() == 'play_next'
 
     if api_end is None:
         try:
-            api_end = player.getTotalTime() - 10
+            # No end time given: end 2 seconds before the media ends.
+            api_end = player.getTotalTime() - 2
         except Exception:
             return None
 

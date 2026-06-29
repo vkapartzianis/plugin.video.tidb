@@ -15,7 +15,9 @@ def execute_skip(player: xbmc.Player, intro_start: float, intro_end: float, file
 
     total_time = player.getTotalTime()
     if target >= total_time:
-        target = total_time - 10
+        # End-of-media skip (e.g. end credits): land 2s before the end so the
+        # file finishes naturally rather than seeking past it.
+        target = total_time - 2
 
     segment_names = {
         'intro': 'intro',

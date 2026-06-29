@@ -146,3 +146,15 @@ msgstr "Oglądaj napisy końcowe"
 msgctxt "#32043"
 msgid "Watch Preview"
 msgstr "Oglądaj zapowiedź"
+
+msgctxt "#32044"
+msgid "End credits action"
+msgstr "Działanie przy napisach końcowych"
+
+msgctxt "#32045"
+msgid "Skip to the end"
+msgstr "Przewiń do końca"
+
+msgctxt "#32046"
+msgid "Play next episode"
+msgstr "Odtwórz następny odcinek"
