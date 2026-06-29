@@ -1,4 +1,6 @@
 # kodi service entry: poll playback, query theintrodb, show skip ui or auto-seek
+import threading
+
 import xbmc
 import xbmcaddon
 import xbmcgui
@@ -9,7 +11,8 @@ import skipper
 import overlay as overlay_mod
 import submit_overlay
 import introdb
-import aptabase_analytics
+# aptabase_analytics is imported lazily, only when the user has opted in — see
+# _reconcile_reporter — so nothing analytics-related loads otherwise.
 
 ADDON = xbmcaddon.Addon()
 _ADDON_ID = ADDON.getAddonInfo('id')
@@ -60,6 +63,43 @@ class TIDBMonitor(xbmc.Monitor):
         # Kodi has already persisted the new values; drop the cache so the next
         # read re-fetches them. Fires on a separate thread from the main loop.
         _invalidate_settings_cache()
+        # Start/stop analytics live when the opt-in toggle changes.
+        _reconcile_reporter()
+
+
+# ── Analytics lifecycle ───────────────────────────────────────────────────
+# The analytics engine is only instantiated while the user has opted in, so
+# nothing loads, spawns a thread, or touches the network unless reporting is
+# explicitly enabled. We reconcile at startup and whenever settings change.
+
+_reporter_lock = threading.Lock()
+
+
+def _analytics_opted_in() -> bool:
+    return _cached_setting('anonymous_usage_reporting_kine') == 'true'
+
+
+def _reconcile_reporter() -> None:
+    global REPORTER
+    if _analytics_opted_in():
+        with _reporter_lock:
+            if REPORTER is None:
+                import aptabase_analytics
+                REPORTER = aptabase_analytics.AptabaseReporter()
+    else:
+        _stop_reporter()
+
+
+def _stop_reporter() -> None:
+    global REPORTER
+    with _reporter_lock:
+        reporter, REPORTER = REPORTER, None
+    if reporter is not None:
+        try:
+            reporter.flush(1.0)
+            reporter.close(1.0)
+        except Exception:
+            pass
 
 
 def _debug_osd(message: str) -> None:
@@ -499,8 +539,8 @@ def _run_service() -> None:
     monitor = TIDBMonitor()
     player = TIDBPlayer()
     session = PlaybackSession()
-    global REPORTER
-    REPORTER = aptabase_analytics.AptabaseReporter()
+    # Only loads the analytics engine if the user has opted in.
+    _reconcile_reporter()
 
     xbmc.log('[TheIntroDB] Service started', xbmc.LOGINFO)
 
@@ -588,10 +628,7 @@ def _run_service() -> None:
             session.all_segments = None
 
     xbmc.log('[TheIntroDB] Service stopped', xbmc.LOGINFO)
-    if REPORTER:
-        REPORTER.flush(1.0)
-        REPORTER.close(1.0)
-        REPORTER = None
+    _stop_reporter()
 
 
 # ── Segment button timing ────────────────────────────────────────────────
