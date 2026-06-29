@@ -451,6 +451,14 @@ def _handle_segment(segment: Dict[str, Any], segment_idx: int, player: TIDBPlaye
             return _handle_next_episode(
                 player, monitor, session, api_end, segment_type, segment_idx)
 
+    # If the skin's OSD is already up and owns the skip button, don't also pop
+    # the standalone pill — the skin's button (driven by the Skip.* properties)
+    # already covers this segment.
+    if _osd_visible() and _osd_button_supported():
+        xbmc.log('[TheIntroDB] Skin OSD button active — suppressing standalone pill for {}'.format(
+            segment_name), xbmc.LOGINFO)
+        return None
+
     # Show skip button
     xbmc.log('[TheIntroDB] Showing skip overlay for {}'.format(segment_name), xbmc.LOGINFO)
     pressed = _show_skip_overlay(player, monitor, api_end, overlay_type, segment_idx)
