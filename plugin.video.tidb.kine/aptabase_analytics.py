@@ -42,7 +42,7 @@ def _new_session_id() -> str:
 
 
 def _get_config() -> Tuple[bool, str, str]:
-    enabled = _fresh_bool('anonymous_usage_reporting')
+    enabled = _fresh_bool('anonymous_usage_reporting_kine')
     host = (APTABASE_HOST or '').strip()
     app_key = (APTABASE_APP_KEY or '').strip()
     host = host[:-1] if host.endswith('/') else host

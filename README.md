@@ -53,7 +53,16 @@ TheIntroDB Kine Addon includes a few settings to adjust behavior:
 - **Extra seconds after segment end**: Adds a small offset to the skip target
 - **Enable lookups**: Turns TheIntroDB requests on or off
 - **API key**: Lets you use your TheIntroDB API key if required
+- **Anonymous usage reporting**: Off by default; see [Privacy](#privacy) below
 - **Debug options**: Enables verbose logging and on-screen notifications
+
+---
+
+## Privacy
+
+The add-on can send **anonymous usage analytics** to TheIntroDB to help gauge how features are used. This is **off by default** — nothing is sent unless you opt in via **Settings → Privacy → Anonymous usage reporting**.
+
+When enabled, it sends a handful of counter events (e.g. that a segment was skipped, and the segment type) plus coarse system info (OS name/version, device model, locale, add-on version) and a random, rotating session id. It **does not** send any title, file path, TMDb/IMDb id, account, or other identifying information. Reports go to `analytics.theintrodb.org`. Turn the setting off (or leave it off) to disable all reporting.
 
 ---
 

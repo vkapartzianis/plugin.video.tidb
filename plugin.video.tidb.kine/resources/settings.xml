@@ -89,9 +89,9 @@
         </category>
         <category id="privacy" label="32029">
             <group id="1">
-                <setting id="anonymous_usage_reporting" type="boolean" label="32033">
+                <setting id="anonymous_usage_reporting_kine" type="boolean" label="32033">
                     <level>0</level>
-                    <default>true</default>
+                    <default>false</default>
                     <control type="toggle"/>
                 </setting>
             </group>
