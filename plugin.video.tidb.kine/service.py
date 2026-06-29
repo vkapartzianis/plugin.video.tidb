@@ -153,9 +153,13 @@ def _osd_visible() -> bool:
 # While a segment is manually skippable we publish state on the Home window so
 # a skin can show its own native OSD button instead of our modal fallback:
 #
-#   Window(Home).Property(TheIntroDB.Skip.Active) = true
-#   Window(Home).Property(TheIntroDB.Skip.Label)  = Skip Intro / Skip Recap / ...
-#   Window(Home).Property(TheIntroDB.Skip.Type)   = intro / recap / credits / preview
+#   Window(Home).Property(TheIntroDB.Skip.Active)           = true
+#   Window(Home).Property(TheIntroDB.Skip.Label)            = Skip Intro / Skip Recap / ...
+#   Window(Home).Property(TheIntroDB.Skip.Type)             = intro / recap / credits / preview
+#   Window(Home).Property(TheIntroDB.Skip.RemainingSeconds) = 13      (until segment end)
+#   Window(Home).Property(TheIntroDB.Skip.RemainingLabel)   = 00:13   (mm:ss)
+#   Window(Home).Property(TheIntroDB.Skip.DurationSeconds)  = 85      (whole segment)
+#   Window(Home).Property(TheIntroDB.Skip.ProgressPercent)  = 84      (0-100, through segment)
 #
 # The skin advertises that its currently-loaded OSD owns the button by setting
 #   Window(Home).Property(TheIntroDB.Kine.OSDButtonSupported) = true
@@ -168,6 +172,10 @@ HOME_WINDOW_ID = 10000
 PROP_SKIP_ACTIVE = 'TheIntroDB.Skip.Active'
 PROP_SKIP_LABEL = 'TheIntroDB.Skip.Label'
 PROP_SKIP_TYPE = 'TheIntroDB.Skip.Type'
+PROP_SKIP_REMAINING_SECONDS = 'TheIntroDB.Skip.RemainingSeconds'
+PROP_SKIP_REMAINING_LABEL = 'TheIntroDB.Skip.RemainingLabel'
+PROP_SKIP_DURATION_SECONDS = 'TheIntroDB.Skip.DurationSeconds'
+PROP_SKIP_PROGRESS_PERCENT = 'TheIntroDB.Skip.ProgressPercent'
 PROP_OSD_BUTTON_SUPPORTED = 'TheIntroDB.Kine.OSDButtonSupported'
 SKIP_NOTIFY_MESSAGE = 'SkipCurrent'
 
@@ -199,12 +207,31 @@ def _osd_button_supported() -> bool:
         return False
 
 
-def _publish_skip_properties(segment_type: str, label: str) -> None:
+def _fmt_mmss(seconds: float) -> str:
+    s = max(0, int(seconds))
+    return '{:02d}:{:02d}'.format(s // 60, s % 60)
+
+
+def _publish_skip_properties(ctx: Dict[str, Any]) -> None:
+    # Static identity plus per-tick progress so skins can render a countdown or
+    # progress bar without recomputing from playhead/segment bounds themselves.
+    start = ctx['start']
+    end = ctx['end']
+    current = ctx['current']
+    duration = max(0.0, end - start)
+    remaining = max(0.0, end - current)
+    elapsed = max(0.0, current - start)
+    progress = int(elapsed / duration * 100) if duration > 0 else 0
+    progress = max(0, min(100, progress))
     try:
         win = _home_window()
         win.setProperty(PROP_SKIP_ACTIVE, 'true')
-        win.setProperty(PROP_SKIP_TYPE, segment_type)
-        win.setProperty(PROP_SKIP_LABEL, label)
+        win.setProperty(PROP_SKIP_TYPE, ctx['type'])
+        win.setProperty(PROP_SKIP_LABEL, ctx['label'])
+        win.setProperty(PROP_SKIP_REMAINING_SECONDS, str(int(remaining)))
+        win.setProperty(PROP_SKIP_REMAINING_LABEL, _fmt_mmss(remaining))
+        win.setProperty(PROP_SKIP_DURATION_SECONDS, str(int(round(duration))))
+        win.setProperty(PROP_SKIP_PROGRESS_PERCENT, str(progress))
     except Exception:
         pass
 
@@ -212,9 +239,10 @@ def _publish_skip_properties(segment_type: str, label: str) -> None:
 def _clear_skip_properties() -> None:
     try:
         win = _home_window()
-        win.clearProperty(PROP_SKIP_ACTIVE)
-        win.clearProperty(PROP_SKIP_TYPE)
-        win.clearProperty(PROP_SKIP_LABEL)
+        for prop in (PROP_SKIP_ACTIVE, PROP_SKIP_TYPE, PROP_SKIP_LABEL,
+                     PROP_SKIP_REMAINING_SECONDS, PROP_SKIP_REMAINING_LABEL,
+                     PROP_SKIP_DURATION_SECONDS, PROP_SKIP_PROGRESS_PERCENT):
+            win.clearProperty(prop)
     except Exception:
         pass
 
@@ -247,6 +275,7 @@ def _compute_active_skip(session: 'PlaybackSession', player: TIDBPlayer,
                 'index': idx,
                 'start': api_start,
                 'end': api_end,
+                'current': current_time,
                 'filename': session.current_file,
                 'label': _skip_label(segment_type),
                 'player': player,
@@ -266,7 +295,7 @@ def _update_active_skip(session: 'PlaybackSession', player: TIDBPlayer,
     with _active_skip_lock:
         _active_skip = ctx
     if ctx:
-        _publish_skip_properties(ctx['type'], ctx['label'])
+        _publish_skip_properties(ctx)
     else:
         _clear_skip_properties()
 

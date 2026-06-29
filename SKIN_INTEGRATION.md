@@ -15,11 +15,21 @@ capability handshake; no add-on changes or skin-name whitelist are involved.
    | `TheIntroDB.Skip.Active` | `true` | A segment is skippable right now |
    | `TheIntroDB.Skip.Label`  | `Skip Intro` | Localized button label |
    | `TheIntroDB.Skip.Type`   | `intro` | `intro` / `recap` / `credits` / `preview` |
+   | `TheIntroDB.Skip.RemainingSeconds` | `13` | Whole seconds until the segment ends |
+   | `TheIntroDB.Skip.RemainingLabel` | `00:13` | The same remaining time as `mm:ss` |
+   | `TheIntroDB.Skip.DurationSeconds` | `85` | Length of the whole segment in seconds |
+   | `TheIntroDB.Skip.ProgressPercent` | `84` | How far through the segment, `0`–`100` |
 
    `TheIntroDB.Skip.Active` stays `true` from the moment the segment becomes
    skippable until it ends, playback stops or changes file, the segment is
    auto-skipped, or the user skips it. It is **not** cleared just because the
    initial few-second standalone button timed out.
+
+   The four progress properties refresh roughly once per second while the
+   segment is active (so a skin can render a countdown or progress bar), and are
+   cleared together with `Active`. Use `Integer.IsGreater` /
+   `$INFO[...]` on them as needed; they are plain strings, so a progress bar
+   width can read `$INFO[Window(Home).Property(TheIntroDB.Skip.ProgressPercent)]`.
 
 2. **The skin advertises support for the current OSD.** In your `VideoOSD.xml`,
    set a transient flag while the real OSD is loaded, and clear it on unload:
