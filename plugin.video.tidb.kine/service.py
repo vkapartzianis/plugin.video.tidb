@@ -66,6 +66,17 @@ class TIDBMonitor(xbmc.Monitor):
         # Start/stop analytics live when the opt-in toggle changes.
         _reconcile_reporter()
 
+    def onNotification(self, sender: str, method: str, data: str) -> None:
+        # A skin's native OSD "Skip" button calls NotifyAll(plugin.video.tidb.kine,
+        # SkipCurrent). Match the message tail so TheIntroDB.SkipCurrent works too.
+        # Fires on a separate thread from the main loop.
+        try:
+            tail = (method or '').rsplit('.', 1)[-1].lower()
+        except Exception:
+            tail = ''
+        if tail == SKIP_NOTIFY_MESSAGE.lower():
+            _skip_active_segment()
+
 
 # ── Analytics lifecycle ───────────────────────────────────────────────────
 # The analytics engine is only instantiated while the user has opted in, so
@@ -127,6 +138,158 @@ def _osd_visible() -> bool:
         return bool(xbmc.getCondVisibility(_OSD_VISIBLE_CONDITION))
     except Exception:
         return False
+
+
+# ── Skin integration contract ─────────────────────────────────────────────
+# While a segment is manually skippable we publish state on the Home window so
+# a skin can show its own native OSD button instead of our modal fallback:
+#
+#   Window(Home).Property(TheIntroDB.Skip.Active) = true
+#   Window(Home).Property(TheIntroDB.Skip.Label)  = Skip Intro / Skip Recap / ...
+#   Window(Home).Property(TheIntroDB.Skip.Type)   = intro / recap / credits / preview
+#
+# The skin advertises that its currently-loaded OSD owns the button by setting
+#   Window(Home).Property(TheIntroDB.Kine.OSDButtonSupported) = true
+# (cleared on OSD unload). When that flag is set we suppress the skip-choice
+# fallback and let the skin's button drive skipping. The button skips by sending
+#   NotifyAll(plugin.video.tidb.kine, SkipCurrent)
+# which lands in TIDBMonitor.onNotification and skips the active segment.
+
+HOME_WINDOW_ID = 10000
+PROP_SKIP_ACTIVE = 'TheIntroDB.Skip.Active'
+PROP_SKIP_LABEL = 'TheIntroDB.Skip.Label'
+PROP_SKIP_TYPE = 'TheIntroDB.Skip.Type'
+PROP_OSD_BUTTON_SUPPORTED = 'TheIntroDB.Kine.OSDButtonSupported'
+SKIP_NOTIFY_MESSAGE = 'SkipCurrent'
+
+_SKIP_LABEL_STRINGS = {
+    'intro': STR_SKIP_INTRO,
+    'recap': STR_SKIP_RECAP,
+    'credits': STR_SKIP_CREDITS,
+    'preview': STR_SKIP_PREVIEW,
+}
+
+# The active manually-skippable segment, shared with the notification thread.
+_active_skip_lock = threading.Lock()
+_active_skip = None  # type: Optional[Dict[str, Any]]
+
+
+def _skip_label(segment_type: str) -> str:
+    return ADDON.getLocalizedString(_SKIP_LABEL_STRINGS.get(segment_type, STR_SKIP_INTRO))
+
+
+def _home_window() -> 'xbmcgui.Window':
+    return xbmcgui.Window(HOME_WINDOW_ID)
+
+
+def _osd_button_supported() -> bool:
+    # True only while the visible OSD has advertised native skip-button support.
+    try:
+        return _home_window().getProperty(PROP_OSD_BUTTON_SUPPORTED) == 'true'
+    except Exception:
+        return False
+
+
+def _publish_skip_properties(segment_type: str, label: str) -> None:
+    try:
+        win = _home_window()
+        win.setProperty(PROP_SKIP_ACTIVE, 'true')
+        win.setProperty(PROP_SKIP_TYPE, segment_type)
+        win.setProperty(PROP_SKIP_LABEL, label)
+    except Exception:
+        pass
+
+
+def _clear_skip_properties() -> None:
+    try:
+        win = _home_window()
+        win.clearProperty(PROP_SKIP_ACTIVE)
+        win.clearProperty(PROP_SKIP_TYPE)
+        win.clearProperty(PROP_SKIP_LABEL)
+    except Exception:
+        pass
+
+
+def _compute_active_skip(session: 'PlaybackSession', player: TIDBPlayer,
+                         enabled_segments: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """The manually-skippable segment the playhead is currently inside, if any.
+
+    Excludes auto-skip segments (no user button) and next-episode candidates
+    (handled by their own overlay). Indexing matches the main loop's enumerate.
+    """
+    if not player.isPlaying():
+        return None
+    try:
+        current_time = player.getTime()
+    except Exception:
+        return None
+    margin = 0.25
+    for idx, segment in enumerate(enabled_segments):
+        bounds = _resolve_segment_bounds(segment, player)
+        if bounds is None:
+            continue
+        api_start, api_end, is_next_ep = bounds
+        segment_type = segment['type']
+        if is_next_ep or _fresh_bool('auto_skip_{}'.format(segment_type)):
+            continue
+        if api_start <= current_time < (api_end - margin):
+            return {
+                'type': segment_type,
+                'index': idx,
+                'start': api_start,
+                'end': api_end,
+                'filename': session.current_file,
+                'label': _skip_label(segment_type),
+                'player': player,
+            }
+    return None
+
+
+def _update_active_skip(session: 'PlaybackSession', player: TIDBPlayer,
+                        enabled_segments: List[Dict[str, Any]]) -> None:
+    """Recompute the active segment and (un)publish the skin properties.
+
+    Active state survives the standalone button timing out; it clears only when
+    the segment ends, playback stops/changes, or the segment is skipped.
+    """
+    global _active_skip
+    ctx = _compute_active_skip(session, player, enabled_segments)
+    with _active_skip_lock:
+        _active_skip = ctx
+    if ctx:
+        _publish_skip_properties(ctx['type'], ctx['label'])
+    else:
+        _clear_skip_properties()
+
+
+def _clear_skip_state() -> None:
+    global _active_skip
+    with _active_skip_lock:
+        _active_skip = None
+    _clear_skip_properties()
+
+
+def _skip_active_segment() -> None:
+    """Skip the currently active segment — invoked by the skin's OSD button."""
+    with _active_skip_lock:
+        ctx = _active_skip
+    if not ctx:
+        return
+    player = ctx.get('player')
+    if not player or not player.isPlaying():
+        return
+    try:
+        current_time = player.getTime()
+    except Exception:
+        current_time = None
+    if current_time is not None and current_time >= ctx['end']:
+        return  # already past the segment
+    skipper.execute_skip(player, ctx['start'], ctx['end'], ctx['filename'], ctx['type'])
+    if REPORTER:
+        REPORTER.track('segment_skipped', {'segment_type': ctx['type']})
+    _debug_osd('Skipped {} (OSD button)'.format(ctx['type']))
+    xbmc.log('[TheIntroDB] Skipped {} via skin OSD button'.format(ctx['type']), xbmc.LOGINFO)
+    _clear_skip_state()
 
 
 # ── Playback session state ────────────────────────────────────────────────
@@ -309,6 +472,10 @@ def _maybe_show_dual(segment: Dict[str, Any], segment_idx: int, player: TIDBPlay
     if is_next_ep or _fresh_bool('auto_skip_{}'.format(segment_type)):
         return
     if not player.isPlaying() or not _osd_visible():
+        return
+    # If the visible OSD has a native TheIntroDB button, let the skin own it and
+    # skip our modal fallback; the published Skip.* properties drive that button.
+    if _osd_button_supported():
         return
 
     # Re-evaluate position: the start prompt may have run for several seconds.
@@ -550,14 +717,17 @@ def _run_service() -> None:
 
         if not player.playback_started:
             session.reset()
+            _clear_skip_state()
             continue
 
         # skip movies that do not look like tv; player decides
         if not player.is_tv_content:
+            _clear_skip_state()
             continue
 
         filename = player.filename
         if not filename:
+            _clear_skip_state()
             continue
 
         # New file — reset everything
@@ -615,6 +785,9 @@ def _run_service() -> None:
             xbmc.log('[TheIntroDB] Total enabled segments to process: {}'.format(
                 len(enabled_segments)), xbmc.LOGINFO)
 
+        # Publish skip state for the skin before any (blocking) overlay shows.
+        _update_active_skip(session, player, enabled_segments)
+
         for seg_idx, segment in enumerate(enabled_segments):
             result = _handle_segment(
                 segment, seg_idx, player, monitor, session, filename)
@@ -628,6 +801,7 @@ def _run_service() -> None:
             session.all_segments = None
 
     xbmc.log('[TheIntroDB] Service stopped', xbmc.LOGINFO)
+    _clear_skip_state()
     _stop_reporter()
 
 
