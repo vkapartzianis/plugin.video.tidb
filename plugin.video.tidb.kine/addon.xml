@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <addon id="plugin.video.tidb.kine"
        name="TheIntroDB Kine Addon"
-       version="2.0.0"
+       version="2.1.0"
        provider-name="TheIntroDB">
     <requires>
         <import addon="xbmc.python" version="3.0.1"/>
     </requires>
     <extension point="xbmc.service" library="service.py" start="startup"/>
     <extension point="xbmc.addon.metadata">
-        <path>plugin.video.tidb.kine-2.0.0.zip</path>
+        <path>plugin.video.tidb.kine-2.1.0.zip</path>
         <summary lang="en_GB">Skip intro, recap, credits, and preview segments in movies and TV shows using TheIntroDB</summary>
         <description lang="en_GB">Looks up segment timings from TheIntroDB while you watch. Uses TMDB ids when present; otherwise IMDb ids (tt…) with season/episode.</description>
         <disclaimer lang="en_GB">This product uses the TMDB API but is not endorsed or certified by TMDB.</disclaimer>
@@ -17,6 +17,6 @@
         <assets>
             <icon>resources/icon.png</icon>
         </assets>
-        <news lang="en_GB">v2.0.0 - Usage analytics is now opt-in and off by default. New "End credits action" setting: skip to the end or play the next episode. Skins can drive a native in-OSD skip button. TMDb now resolves IMDb ids for the IntroDB.app fallback. Modernized settings schema and overridable skin templates.</news>
+        <news lang="en_GB">v2.1.0 - Skin skip contract: new progress properties (remaining/duration/percent) for countdowns and progress bars, and the standalone skip pill is now suppressed when the skin's native OSD button is already showing.</news>
     </extension>
 </addon>

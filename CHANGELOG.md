@@ -4,6 +4,19 @@ All notable changes to the **TheIntroDB Kine** add-on are documented here. This
 project loosely follows [Keep a Changelog](https://keepachangelog.com) and
 [Semantic Versioning](https://semver.org).
 
+## [2.1.0] - 2026-06-29
+
+### Added
+- **Skip progress properties for skins.** While a segment is skippable the
+  service publishes `TheIntroDB.Skip.RemainingSeconds`, `…RemainingLabel`
+  (mm:ss), `…DurationSeconds`, and `…ProgressPercent` (0–100) on the Home
+  window, refreshed each tick, so a skin can render a countdown or progress bar.
+
+### Changed
+- When a segment becomes skippable while the OSD is already up and the skin
+  advertises native skip-button support, the standalone skip pill is no longer
+  shown — the skin's button covers it.
+
 ## [2.0.0] - 2026-06-29
 
 ### Added
