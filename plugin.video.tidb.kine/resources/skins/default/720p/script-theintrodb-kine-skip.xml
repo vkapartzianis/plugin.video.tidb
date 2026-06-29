@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 720p layout; defaultRes in overlay.py is 1080i — keep in sync if you switch resolution.
+     Pill textures set from Python onInit; bg comes from image controls, not the button.
+     Default bg 70% white + dark text; focus = solid white bg + glow ring + 104% zoom. -->
+<window type="dialog" id="14000">
+    <defaultcontrol always="true">3001</defaultcontrol>
+    <coordinates>
+        <system>1</system>
+        <posx>0</posx>
+        <posy>0</posy>
+    </coordinates>
+    <controls>
+        <control type="group">
+            <posx>1029</posx>
+            <posy>581</posy>
+            <width>187</width>
+            <height>37</height>
+
+            <animation effect="slide" start="32,0" end="0,0" time="260" tween="cubic" easing="out">WindowOpen</animation>
+            <animation effect="fade" start="0" end="100" time="260">WindowOpen</animation>
+            <animation effect="slide" start="0,0" end="32,0" time="200" tween="cubic" easing="in">WindowClose</animation>
+            <animation effect="fade" start="100" end="0" time="200">WindowClose</animation>
+            <animation effect="zoom" center="auto" start="100" end="104" time="120" tween="sine" easing="out" condition="Control.HasFocus(3001)">Conditional</animation>
+
+            <control type="image" id="3003">
+                <posx>1</posx>
+                <posy>3</posy>
+                <width>187</width>
+                <height>37</height>
+                <aspectratio>stretch</aspectratio>
+                <texture colordiffuse="66000000" border="10">rounded_rect.png</texture>
+            </control>
+            <control type="image" id="3004">
+                <posx>0</posx>
+                <posy>0</posy>
+                <width>187</width>
+                <height>37</height>
+                <aspectratio>stretch</aspectratio>
+                <texture colordiffuse="C6FFFFFF" border="10">rounded_rect.png</texture>
+            </control>
+            <control type="image" id="3006">
+                <posx>0</posx>
+                <posy>0</posy>
+                <width>187</width>
+                <height>37</height>
+                <aspectratio>stretch</aspectratio>
+                <texture colordiffuse="FFFFFFFF" border="10">rounded_rect.png</texture>
+                <visible>Control.HasFocus(3001)</visible>
+            </control>
+
+            <control type="button" id="3001">
+                <posx>0</posx>
+                <posy>0</posy>
+                <width>187</width>
+                <height>37</height>
+                <align>center</align>
+                <aligny>center</aligny>
+                <font>font16</font>
+                <textcolor>FF111111</textcolor>
+                <focusedcolor>FF111111</focusedcolor>
+                <texturefocus colordiffuse="FFFFFFFF" border="10">rounded_rect.png</texturefocus>
+                <texturenofocus colordiffuse="C6FFFFFF" border="10">rounded_rect.png</texturenofocus>
+                <label>Skip intro</label>
+            </control>
+        </control>
+    </controls>
+</window>

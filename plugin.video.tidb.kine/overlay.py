@@ -28,7 +28,7 @@ STR_WATCH_RECAP = 32041
 STR_WATCH_CREDITS = 32042
 STR_WATCH_PREVIEW = 32043
 
-# must match overlay.xml window id
+# must match the window id in script-theintrodb-kine-skip.xml
 OVERLAY_WINDOW_ID = 14000
 
 ACTION_SELECT = 7
@@ -226,7 +226,7 @@ def show_skip_overlay(callback: Optional[Callable[[], None]] = None, intro_end: 
         return False
     try:
         wnd = SkipOverlay(
-            'overlay.xml',
+            'script-theintrodb-kine-skip.xml',
             ADDON_PATH,
             'default',
             _OVERLAY_RES,
@@ -471,7 +471,7 @@ def show_skip_choice_overlay(intro_end: Optional[float] = None, player: Optional
         return 'closed'
     try:
         wnd = SkipChoiceOverlay(
-            'overlay_choice.xml',
+            'script-theintrodb-kine-skip-choice.xml',
             ADDON_PATH,
             'default',
             _OVERLAY_RES,

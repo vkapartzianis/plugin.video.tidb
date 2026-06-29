@@ -1,5 +1,6 @@
 # submit_overlay.py — overlay for marking intro start/end timestamps during playback
-# Reuses the same overlay.xml skin pill as the skip button.
+# Uses script-theintrodb-kine-overlay.xml, a dedicated copy of the skip pill so
+# skins can override the mark overlay independently of the skip button.
 import threading
 import time
 import os
@@ -189,7 +190,7 @@ def show_submit_mark_overlay(label_text: str, player: Optional[xbmc.Player] = No
         return False
     try:
         wnd = SubmitMarkOverlay(
-            'overlay.xml',
+            'script-theintrodb-kine-overlay.xml',
             ADDON_PATH,
             'default',
             _OVERLAY_RES,
