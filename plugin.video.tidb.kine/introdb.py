@@ -56,8 +56,13 @@ def _is_enabled() -> bool:
 
 
 def _wait_rate_limit(service: str) -> bool:
-    """Pace requests to a single service; returns False if it's in 429 backoff."""
+    """Pace requests to a single service; returns False if it's in 429 backoff.
+
+    The pacing sleep happens outside the lock so a gap for one service never
+    blocks a concurrent request to another (primary and fallback run in parallel).
+    """
     gap = _PROACTIVE_GAP.get(service, 0.0)
+    wait = 0.0
     with _rate_limit_lock:
         st = _rate_limit_state.setdefault(service, {'last': 0.0, 'until': 0.0})
         now = time.time()
@@ -66,10 +71,12 @@ def _wait_rate_limit(service: str) -> bool:
                      xbmc.LOGINFO)
             return False
         if gap:
-            wait = gap - (now - st['last'])
-            if wait > 0:
-                time.sleep(wait)
-        st['last'] = time.time()
+            wait = max(0.0, gap - (now - st['last']))
+        # Reserve this service's next slot so concurrent same-service callers queue
+        # behind us; the wait itself happens below, outside the lock.
+        st['last'] = now + wait
+    if wait > 0:
+        time.sleep(wait)
     return True
 
 
@@ -438,18 +445,45 @@ def _request_media(tmdb_id: Optional[Union[str, int]], imdb_id: Optional[str], s
     we resolve the show's from its TMDb id so the fallback can still run.
     Plausibility and consensus selection happen in _pick_best_segments_all_types.
     Returns the merged {type: [candidate, ...]} or None."""
-    primary = _query_primary(tmdb_id, imdb_id, season, episode, is_movie, duration_ms)
+    # Movies: IntroDB.app is TV-only, so query TheIntroDB only.
+    if is_movie:
+        primary = _query_primary(tmdb_id, imdb_id, season, episode, is_movie, duration_ms)
+        return _merge_sources(primary, None, want_types)
 
-    fallback = None
-    if not is_movie:
+    def fetch_primary() -> Optional[Dict[str, Any]]:
+        return _query_primary(tmdb_id, imdb_id, season, episode, is_movie, duration_ms)
+
+    def fetch_fallback() -> Optional[Dict[str, Any]]:
+        # IntroDB.app is IMDb-only; resolve the show's IMDb id from TMDb when Kodi
+        # gave none (cached, runs concurrently with the primary request).
         fb_imdb = imdb_id
         if not _normalize_imdb(fb_imdb) and tmdb_id and _valid_tmdb(tmdb_id):
             s, e = _episode_nums(season, episode)
             if s is not None and e is not None and s > 0 and e > 0:
                 fb_imdb = _resolve_imdb_from_tmdb(tmdb_id)
-        fallback = _query_fallback(fb_imdb, season, episode, is_movie)
+        return _query_fallback(fb_imdb, season, episode, is_movie)
 
-    return _merge_sources(primary, fallback, want_types)
+    # Both hit different hosts with independent (per-service) rate limits, and we
+    # always want both — so fetch them in parallel: one round-trip, not two.
+    results = {}  # type: Dict[str, Optional[Dict[str, Any]]]
+    threads = []
+    for key, fn in (('primary', fetch_primary), ('fallback', fetch_fallback)):
+        t = threading.Thread(target=_capture_result, args=(results, key, fn),
+                             name='tidb-{}'.format(key))
+        t.start()
+        threads.append(t)
+    for t in threads:
+        t.join()
+
+    return _merge_sources(results.get('primary'), results.get('fallback'), want_types)
+
+
+def _capture_result(results: Dict[str, Any], key: str, fn) -> None:
+    try:
+        results[key] = fn()
+    except Exception as ex:
+        xbmc.log('[TheIntroDB] {} request thread failed: {}'.format(key, ex), xbmc.LOGWARNING)
+        results[key] = None
 
 
 def _merge_sources(primary: Optional[Dict[str, Any]], fallback: Optional[Dict[str, Any]],
