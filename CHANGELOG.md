@@ -4,6 +4,21 @@ All notable changes to the **TheIntroDB Kine** add-on are documented here. This
 project loosely follows [Keep a Changelog](https://keepachangelog.com) and
 [Semantic Versioning](https://semver.org).
 
+## [3.0.1] - 2026-06-30
+
+### Fixed
+- **Rate limiting is now per-service.** The pacing gap and 429 backoff were
+  shared across hosts, so a backoff from TheIntroDB would have blocked the
+  IntroDB.app fallback (and submissions) for minutes. Each host now keeps its
+  own state; TheIntroDB keeps its proactive gap, IntroDB.app gets none (but
+  still honors a 429), and TMDb stays separate.
+
+### Performance
+- **Parallel database lookups.** Since every TV lookup queries both TheIntroDB
+  and IntroDB.app, they now run concurrently (one round-trip ~0.3s instead of
+  two ~0.6s); the TMDb IMDb-id resolution overlaps the primary request. Movies
+  stay single-request.
+
 ## [3.0.0] - 2026-06-30
 
 ### Changed
