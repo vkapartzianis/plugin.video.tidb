@@ -11,11 +11,11 @@ import skipper
 import overlay as overlay_mod
 import submit_overlay
 import introdb
+import tidb_settings
 # aptabase_analytics is imported lazily, only when the user has opted in — see
 # _reconcile_reporter — so nothing analytics-related loads otherwise.
 
 ADDON = xbmcaddon.Addon()
-_ADDON_ID = ADDON.getAddonInfo('id')
 ADDON_NAME = ADDON.getAddonInfo('name')
 REPORTER = None
 
@@ -32,30 +32,17 @@ STR_SUBMIT_FAILED = 32023
 SUBMIT_WINDOW_SECS = 300.0  # first 5 minutes
 
 
-# ── Settings cache ────────────────────────────────────────────────────────
-# Reading a setting used to build a fresh xbmcaddon.Addon() on every call
-# (once per second in the main loop) so GUI edits applied without a restart.
-# Instead we cache values in memory and clear the cache when Kodi notifies us
-# of a change, so edits still apply live but the hot path stays cheap.
-
-_settings_cache = {}  # type: Dict[str, str]
-
+# ── Settings access ───────────────────────────────────────────────────────
+# All setting reads go through the shared tidb_settings cache so GUI edits apply
+# live (the cache is cleared on Monitor.onSettingsChanged) without rebuilding an
+# xbmcaddon.Addon() on every read. These thin wrappers keep the local call sites.
 
 def _cached_setting(key: str) -> str:
-    try:
-        return _settings_cache[key]
-    except KeyError:
-        pass
-    try:
-        value = xbmcaddon.Addon(_ADDON_ID).getSetting(key)
-    except Exception:
-        value = ADDON.getSetting(key)
-    _settings_cache[key] = value
-    return value
+    return tidb_settings.get(key)
 
 
 def _invalidate_settings_cache() -> None:
-    _settings_cache.clear()
+    tidb_settings.invalidate()
 
 
 class TIDBMonitor(xbmc.Monitor):

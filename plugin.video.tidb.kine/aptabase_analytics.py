@@ -12,6 +12,7 @@ from typing import Optional, Dict, Any, List, Tuple
 import xbmc
 import xbmcaddon
 import xbmcvfs
+import tidb_settings
 
 ADDON = xbmcaddon.Addon()
 _ADDON_ID = ADDON.getAddonInfo('id')
@@ -22,14 +23,11 @@ PERSIST_INTERVAL_SECS = 30.0
 
 
 def _fresh_setting(key: str) -> str:
-    try:
-        return xbmcaddon.Addon(_ADDON_ID).getSetting(key)
-    except Exception:
-        return ADDON.getSetting(key)
+    return tidb_settings.get(key)
 
 
 def _fresh_bool(key: str) -> bool:
-    return _fresh_setting(key) == 'true'
+    return tidb_settings.get_bool(key)
 
 
 def _utc_iso() -> str:

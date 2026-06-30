@@ -1,7 +1,7 @@
 import json
 import time
 import xbmc
-import xbmcaddon
+import tidb_settings
 from typing import Optional, Dict, Any, Tuple, List, Union
 
 try:
@@ -9,9 +9,6 @@ try:
     from urllib.error import HTTPError, URLError
 except ImportError:
     from urllib2 import Request, urlopen, HTTPError, URLError
-
-ADDON = xbmcaddon.Addon()
-_ADDON_ID = ADDON.getAddonInfo('id')
 
 API_BASE = 'https://api.theintrodb.org/v3'
 # Fallback source queried when the primary has no data for a title.
@@ -30,7 +27,7 @@ _rate_limit_until = 0.0
 
 
 def _debug_logging() -> bool:
-    return ADDON.getSetting('debug_logging') == 'true'
+    return tidb_settings.get_bool('debug_logging')
 
 
 def _log_resp(body: str) -> None:
@@ -41,14 +38,11 @@ def _log_resp(body: str) -> None:
 
 
 def _get_api_key() -> str:
-    return (ADDON.getSetting('introdb_api_key') or '').strip()
+    return (tidb_settings.get('introdb_api_key') or '').strip()
 
 
 def _is_enabled() -> bool:
-    try:
-        return xbmcaddon.Addon(_ADDON_ID).getSetting('introdb_enabled') == 'true'
-    except Exception:
-        return ADDON.getSetting('introdb_enabled') == 'true'
+    return tidb_settings.get_bool('introdb_enabled')
 
 
 def _wait_rate_limit() -> bool:
@@ -152,14 +146,14 @@ def _pick_best_segments_all_types(segments: List[Dict[str, Any]], segment_type: 
         start = seg.get('start_ms')
         end = seg.get('end_ms')
         
-        if ADDON.getSetting('debug_logging') == 'true':
+        if _debug_logging():
             xbmc.log('[TheIntroDB] Processing {} segment {}: start_ms={}, end_ms={}'.format(segment_type, seg_idx, start, end), xbmc.LOGINFO)
         
         # Handle different segment type requirements
         if segment_type == 'intro' or segment_type == 'recap':
             # Intro/Recap: start optional (can be null), end required
             if end is None:
-                if ADDON.getSetting('debug_logging') == 'true':
+                if _debug_logging():
                     xbmc.log('[TheIntroDB] Skipping {} segment {}: end is None'.format(segment_type, seg_idx), xbmc.LOGINFO)
                 continue
             if start is None:
@@ -167,13 +161,13 @@ def _pick_best_segments_all_types(segments: List[Dict[str, Any]], segment_type: 
         elif segment_type == 'credits' or segment_type == 'preview':
             # Credits/Preview: start required, end optional (null = end of media)
             if start is None:
-                if ADDON.getSetting('debug_logging') == 'true':
+                if _debug_logging():
                     xbmc.log('[TheIntroDB] Skipping {} segment {}: start is None'.format(segment_type, seg_idx), xbmc.LOGINFO)
                 continue
             # end can be null (means end of media)
         
         if end is not None and end <= start:
-            if ADDON.getSetting('debug_logging') == 'true':
+            if _debug_logging():
                 xbmc.log('[TheIntroDB] Skipping {} segment {}: end <= start ({} <= {})'.format(segment_type, seg_idx, end, start), xbmc.LOGINFO)
             continue
             
@@ -181,7 +175,7 @@ def _pick_best_segments_all_types(segments: List[Dict[str, Any]], segment_type: 
         count = seg.get('submission_count', 1)
         score = float(conf) + count * 0.001
         
-        if ADDON.getSetting('debug_logging') == 'true':
+        if _debug_logging():
             xbmc.log('[TheIntroDB] Valid {} segment {}: start={}, end={}, score={:.3f}'.format(segment_type, seg_idx, start, end, score), xbmc.LOGINFO)
         
         valid_segments.append({
@@ -192,7 +186,7 @@ def _pick_best_segments_all_types(segments: List[Dict[str, Any]], segment_type: 
             'submission_count': count
         })
     
-    if ADDON.getSetting('debug_logging') == 'true':
+    if _debug_logging():
         xbmc.log('[TheIntroDB] {} valid {} segments found'.format(len(valid_segments), segment_type), xbmc.LOGINFO)
     
     # Sort by score (highest first) and return top segments
@@ -210,7 +204,7 @@ def _pick_best_segments_all_types(segments: List[Dict[str, Any]], segment_type: 
             'type': segment_type
         })
     
-    if ADDON.getSetting('debug_logging') == 'true':
+    if _debug_logging():
         xbmc.log('[TheIntroDB] Returning {} processed {} segments'.format(len(result_segments), segment_type), xbmc.LOGINFO)
     return result_segments
 
@@ -567,7 +561,7 @@ def query_all_segments(tmdb_id: Optional[Union[str, int]] = None, imdb_id: Optio
     all_segments = {}
     
     # Debug: Log what the API actually returned (only if debug logging is enabled)
-    if ADDON.getSetting('debug_logging') == 'true':
+    if _debug_logging():
         xbmc.log('[TheIntroDB] API response keys: {}'.format(list(data.keys())), xbmc.LOGINFO)
         xbmc.log('[TheIntroDB] Full API response (first 500 chars): {}'.format(str(data)[:500]), xbmc.LOGINFO)
         for key in data.keys():
@@ -576,17 +570,17 @@ def query_all_segments(tmdb_id: Optional[Union[str, int]] = None, imdb_id: Optio
     
     for seg_type in SEGMENT_TYPES:
         raw_segments = data.get(seg_type, [])
-        if ADDON.getSetting('debug_logging') == 'true':
+        if _debug_logging():
             xbmc.log('[TheIntroDB] Processing {}: {} raw segments'.format(seg_type, len(raw_segments)), xbmc.LOGINFO)
         segments = _pick_best_segments_all_types(raw_segments, seg_type)
         if segments:
             all_segments[seg_type] = segments
-            if ADDON.getSetting('debug_logging') == 'true':
+            if _debug_logging():
                 xbmc.log('[TheIntroDB] TheIntroDB {}: {} valid segments'.format(seg_type, len(segments)), xbmc.LOGINFO)
         else:
-            if ADDON.getSetting('debug_logging') == 'true':
+            if _debug_logging():
                 xbmc.log('[TheIntroDB] TheIntroDB {}: no valid segments'.format(seg_type), xbmc.LOGINFO)
     
-    if ADDON.getSetting('debug_logging') == 'true':
+    if _debug_logging():
         xbmc.log('[TheIntroDB] Final segments dict: {}'.format(list(all_segments.keys())), xbmc.LOGINFO)
     return all_segments
