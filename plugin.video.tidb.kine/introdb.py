@@ -22,10 +22,18 @@ SEGMENT_TYPES = ('intro', 'recap', 'credits', 'preview')
 TMDB_API_BASE = 'https://api.themoviedb.org/3'
 TMDB_API_KEY = '5b6ab2d01b48b2149e3460be886dcb72'
 _tmdb_imdb_cache = {}  # type: Dict[str, Optional[str]]  # tmdb show id -> imdb id / None
-MIN_REQUEST_GAP = 0.4  # small gap between requests
-_last_request_time = 0.0
-_rate_limit_until = 0.0
-_rate_limit_lock = threading.Lock()  # guards the rate-limit globals across threads
+# Per-service rate limiting. Each upstream host keeps its own state so a backoff
+# or pacing gap for one never throttles another (notably: a 429 from TheIntroDB
+# must not stop us querying the IntroDB.app fallback). TheIntroDB documents a
+# rate limit (429 + Retry-After), so we also keep a small proactive gap between
+# consecutive requests to it; IntroDB.app has no documented limit, so we don't
+# pace it proactively but still honor a 429 if it ever sends one. TMDb is a
+# separate host and isn't routed through this limiter at all.
+SERVICE_PRIMARY = 'theintrodb.org'
+SERVICE_FALLBACK = 'introdb.app'
+_PROACTIVE_GAP = {SERVICE_PRIMARY: 0.4}  # seconds between consecutive same-service requests
+_rate_limit_lock = threading.Lock()  # guards _rate_limit_state across threads
+_rate_limit_state = {}  # type: Dict[str, Dict[str, float]]  # service -> {'last', 'until'}
 
 
 def _debug_logging() -> bool:
@@ -47,23 +55,32 @@ def _is_enabled() -> bool:
     return tidb_settings.get_bool('introdb_enabled')
 
 
-def _wait_rate_limit() -> bool:
-    global _last_request_time
+def _wait_rate_limit(service: str) -> bool:
+    """Pace requests to a single service; returns False if it's in 429 backoff."""
+    gap = _PROACTIVE_GAP.get(service, 0.0)
     with _rate_limit_lock:
+        st = _rate_limit_state.setdefault(service, {'last': 0.0, 'until': 0.0})
         now = time.time()
-        if now < _rate_limit_until:
-            xbmc.log('[TheIntroDB] TheIntroDB rate-limited until {:.0f}'.format(
-                _rate_limit_until), xbmc.LOGINFO)
+        if now < st['until']:
+            xbmc.log('[TheIntroDB] {} rate-limited until {:.0f}'.format(service, st['until']),
+                     xbmc.LOGINFO)
             return False
-        gap = now - _last_request_time
-        if gap < MIN_REQUEST_GAP:
-            time.sleep(MIN_REQUEST_GAP - gap)
-        _last_request_time = time.time()
+        if gap:
+            wait = gap - (now - st['last'])
+            if wait > 0:
+                time.sleep(wait)
+        st['last'] = time.time()
     return True
 
 
-def _do_request(url: str, api_key: str) -> Optional[Dict[str, Any]]:
-    global _rate_limit_until
+def _mark_rate_limited(service: str, retry: float) -> None:
+    """Record a 429 backoff window for one service."""
+    with _rate_limit_lock:
+        st = _rate_limit_state.setdefault(service, {'last': 0.0, 'until': 0.0})
+        st['until'] = time.time() + retry
+
+
+def _do_request(url: str, api_key: str, service: str) -> Optional[Dict[str, Any]]:
     req = Request(url)
     req.add_header('Accept', 'application/json')
     req.add_header('User-Agent', 'TheIntroDB Kine Addon/1.0')
@@ -87,21 +104,20 @@ def _do_request(url: str, api_key: str) -> Optional[Dict[str, Any]]:
                     except ValueError:
                         pass
                     break
-            with _rate_limit_lock:
-                _rate_limit_until = time.time() + retry
-            xbmc.log('[TheIntroDB] TheIntroDB 429 rate limited for {}s'.format(retry),
+            _mark_rate_limited(service, retry)
+            xbmc.log('[TheIntroDB] {} 429 rate limited for {}s'.format(service, retry),
                      xbmc.LOGWARNING)
         elif e.code == 404:
-            xbmc.log('[TheIntroDB] TheIntroDB 404: not in database', xbmc.LOGINFO)
+            xbmc.log('[TheIntroDB] {} 404: not in database'.format(service), xbmc.LOGINFO)
         else:
-            xbmc.log('[TheIntroDB] TheIntroDB HTTP {}'.format(e.code), xbmc.LOGWARNING)
+            xbmc.log('[TheIntroDB] {} HTTP {}'.format(service, e.code), xbmc.LOGWARNING)
         return None
     except URLError as e:
-        xbmc.log('[TheIntroDB] TheIntroDB network error: {}'.format(e.reason),
+        xbmc.log('[TheIntroDB] {} network error: {}'.format(service, e.reason),
                  xbmc.LOGWARNING)
         return None
     except Exception as e:
-        xbmc.log('[TheIntroDB] TheIntroDB request failed: {}'.format(e),
+        xbmc.log('[TheIntroDB] {} request failed: {}'.format(service, e),
                  xbmc.LOGERROR)
         return None
 
@@ -323,10 +339,10 @@ def _query_primary(tmdb_id, imdb_id, season, episode, is_movie, duration_ms) -> 
 
     xbmc.log('[TheIntroDB] TheIntroDB query ({}): {}'.format(mode, url), xbmc.LOGINFO)
 
-    if not _wait_rate_limit():
+    if not _wait_rate_limit(SERVICE_PRIMARY):
         return None
 
-    data = _do_request(url, _get_api_key())
+    data = _do_request(url, _get_api_key(), SERVICE_PRIMARY)
     if not data:
         return None
     if 'error' in data:
@@ -355,11 +371,11 @@ def _query_fallback(imdb_id, season, episode, is_movie) -> Optional[Dict[str, An
     url = '{}/segments?imdb_id={}&season={}&episode={}'.format(API_BASE_FALLBACK, imdb, s, e)
     xbmc.log('[TheIntroDB] IntroDB.app query: {}'.format(url), xbmc.LOGINFO)
 
-    if not _wait_rate_limit():
+    if not _wait_rate_limit(SERVICE_FALLBACK):
         return None
 
     # Public GET endpoint — no auth (the stored key is TheIntroDB's, wrong format here).
-    data = _do_request(url, '')
+    data = _do_request(url, '', SERVICE_FALLBACK)
     if not isinstance(data, dict):
         return None
 
@@ -503,7 +519,7 @@ def submit_segment(tmdb_id: Optional[Union[str, int]] = None, imdb_id: Optional[
         if not _normalize_imdb(imdb_id):
             return False, 'Need a TMDB or IMDb ID to submit.'
 
-    if not _wait_rate_limit():
+    if not _wait_rate_limit(SERVICE_PRIMARY):
         return False, 'Rate limited. Try again later.'
 
     payload = {
@@ -554,7 +570,6 @@ def submit_segment(tmdb_id: Optional[Union[str, int]] = None, imdb_id: Optional[
     req.add_header('User-Agent', 'TheIntroDB Kine Addon/1.0')
     req.add_header('Authorization', 'Bearer {}'.format(api_key))
 
-    global _rate_limit_until
     try:
         resp = urlopen(req, timeout=10)
         resp_body = resp.read().decode('utf-8')
@@ -586,8 +601,7 @@ def submit_segment(tmdb_id: Optional[Union[str, int]] = None, imdb_id: Optional[
                     except ValueError:
                         pass
                     break
-            with _rate_limit_lock:
-                _rate_limit_until = time.time() + retry
+            _mark_rate_limited(SERVICE_PRIMARY, retry)
         xbmc.log('[TheIntroDB] Submit failed: {}'.format(err_msg), xbmc.LOGWARNING)
         return False, err_msg
     except URLError as e:
