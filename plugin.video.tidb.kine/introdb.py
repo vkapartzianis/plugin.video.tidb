@@ -136,81 +136,121 @@ def _pick_best_segment(segments: List[Dict[str, Any]]) -> Tuple[Optional[float],
     return None, None
 
 
-def _pick_best_segments_all_types(segments: List[Dict[str, Any]], segment_type: str) -> List[Dict[str, Any]]:
-    """Pick the best segment(s) for a given type, handling multiple segments."""
+# Intros/recaps live near the start; an "intro" sitting near the end is almost
+# always a mis-tagged credits/outro (a real failure mode in the crowd-sourced
+# data). Credits/preview live near the end. With the file duration we reject
+# these regardless of which database submitted them.
+_INTRO_MAX_START_FRACTION = 0.65   # intro/recap must start within the first 65%
+_OUTRO_MIN_END_FRACTION = 0.50     # credits/preview must end after the first 50%
+_CONSENSUS_BONUS = 0.5             # score boost when both databases agree on a window
+
+
+def _plausible_position(segment_type: str, start_ms: Optional[float], end_ms: Optional[float],
+                        duration_ms: Optional[float]) -> bool:
+    if not duration_ms or duration_ms <= 0:
+        return True  # no duration to judge against — don't filter
+    if segment_type in ('intro', 'recap'):
+        if start_ms is not None and start_ms > _INTRO_MAX_START_FRACTION * duration_ms:
+            return False
+    elif segment_type in ('credits', 'preview'):
+        if end_ms is not None and end_ms < _OUTRO_MIN_END_FRACTION * duration_ms:
+            return False
+    return True
+
+
+def _spans_overlap(a_start: float, a_end: Optional[float], b_start: float, b_end: Optional[float]) -> bool:
+    # A None end means "to end of media"; treat as +inf for overlap purposes.
+    a_e = a_end if a_end is not None else float('inf')
+    b_e = b_end if b_end is not None else float('inf')
+    return a_start < b_e and b_start < a_e
+
+
+def _pick_best_segments_all_types(segments: List[Dict[str, Any]], segment_type: str,
+                                  duration_ms: Optional[Union[str, int]] = None) -> List[Dict[str, Any]]:
+    """Validate candidates, drop implausibly-placed ones, merge windows that both
+    databases agree on (consensus), and return the best segment(s) for a type.
+
+    Input segments are the merged candidates from both sources (each tagged with
+    'source'). Output: list of {start, end (seconds), score, type}, best first.
+    """
     if not segments:
         return []
 
-    valid_segments = []
+    try:
+        dur = float(duration_ms) if duration_ms else None
+    except (TypeError, ValueError):
+        dur = None
+
+    valid = []
     for seg_idx, seg in enumerate(segments):
         if not isinstance(seg, dict):
-            xbmc.log('[TheIntroDB] Skipping {} segment {}: not a dict'.format(segment_type, seg_idx), xbmc.LOGINFO)
             continue
-        
         start = seg.get('start_ms')
         end = seg.get('end_ms')
-        
-        if _debug_logging():
-            xbmc.log('[TheIntroDB] Processing {} segment {}: start_ms={}, end_ms={}'.format(segment_type, seg_idx, start, end), xbmc.LOGINFO)
-        
-        # Handle different segment type requirements
-        if segment_type == 'intro' or segment_type == 'recap':
-            # Intro/Recap: start optional (can be null), end required
+        source = seg.get('source', '?')
+
+        # Type rules: intro/recap need an end (start optional); credits/preview
+        # need a start (end optional = end of media).
+        if segment_type in ('intro', 'recap'):
             if end is None:
-                if _debug_logging():
-                    xbmc.log('[TheIntroDB] Skipping {} segment {}: end is None'.format(segment_type, seg_idx), xbmc.LOGINFO)
                 continue
             if start is None:
                 start = 0
-        elif segment_type == 'credits' or segment_type == 'preview':
-            # Credits/Preview: start required, end optional (null = end of media)
+        else:
             if start is None:
-                if _debug_logging():
-                    xbmc.log('[TheIntroDB] Skipping {} segment {}: start is None'.format(segment_type, seg_idx), xbmc.LOGINFO)
                 continue
-            # end can be null (means end of media)
-        
         if end is not None and end <= start:
-            if _debug_logging():
-                xbmc.log('[TheIntroDB] Skipping {} segment {}: end <= start ({} <= {})'.format(segment_type, seg_idx, end, start), xbmc.LOGINFO)
             continue
-            
+
+        if not _plausible_position(segment_type, start, end, dur):
+            if _debug_logging():
+                xbmc.log('[TheIntroDB] Dropping implausible {} from {}: start_ms={} end_ms={} (duration_ms={})'.format(
+                    segment_type, source, start, end, duration_ms), xbmc.LOGINFO)
+            continue
+
         conf = seg.get('confidence') if seg.get('confidence') is not None else 0.5
-        count = seg.get('submission_count', 1)
-        score = float(conf) + count * 0.001
-        
-        if _debug_logging():
-            xbmc.log('[TheIntroDB] Valid {} segment {}: start={}, end={}, score={:.3f}'.format(segment_type, seg_idx, start, end, score), xbmc.LOGINFO)
-        
-        valid_segments.append({
-            'start_ms': start,
-            'end_ms': end,
+        count = seg.get('submission_count', 1) or 1
+        valid.append({'start_ms': start, 'end_ms': end,
+                      'confidence': float(conf), 'submission_count': count, 'source': source})
+
+    if not valid:
+        return []
+
+    # Cluster candidates whose windows overlap — the same real segment, possibly
+    # submitted to both databases. Agreement across sources is our best signal.
+    clusters = []  # type: List[Dict[str, Any]]
+    for cand in sorted(valid, key=lambda x: x['start_ms']):
+        for cl in clusters:
+            if _spans_overlap(cand['start_ms'], cand['end_ms'], cl['start_ms'], cl['end_ms']):
+                # Adopt the higher-confidence member's bounds; pool the rest.
+                if (cand['confidence'], cand['submission_count']) > (cl['confidence'], cl['submission_count']):
+                    cl['start_ms'], cl['end_ms'], cl['confidence'] = (
+                        cand['start_ms'], cand['end_ms'], cand['confidence'])
+                cl['submission_count'] += cand['submission_count']
+                cl['sources'].add(cand['source'])
+                break
+        else:
+            clusters.append({'start_ms': cand['start_ms'], 'end_ms': cand['end_ms'],
+                             'confidence': cand['confidence'], 'submission_count': cand['submission_count'],
+                             'sources': {cand['source']}})
+
+    result = []
+    for cl in clusters:
+        score = cl['confidence'] + cl['submission_count'] * 0.001
+        if len(cl['sources']) > 1:
+            score += _CONSENSUS_BONUS
+        result.append({
+            'start': cl['start_ms'] / 1000.0 if cl['start_ms'] is not None else None,
+            'end': cl['end_ms'] / 1000.0 if cl['end_ms'] is not None else None,
             'score': score,
-            'confidence': conf,
-            'submission_count': count
+            'type': segment_type,
         })
-    
-    if _debug_logging():
-        xbmc.log('[TheIntroDB] {} valid {} segments found'.format(len(valid_segments), segment_type), xbmc.LOGINFO)
-    
-    # Sort by score (highest first) and return top segments
-    valid_segments.sort(key=lambda x: x['score'], reverse=True)
-    
-    # Convert to seconds and return
-    result_segments = []
-    for seg in valid_segments:
-        start_sec = seg['start_ms'] / 1000.0 if seg['start_ms'] is not None else None
-        end_sec = seg['end_ms'] / 1000.0 if seg['end_ms'] is not None else None
-        result_segments.append({
-            'start': start_sec,
-            'end': end_sec,
-            'score': seg['score'],
-            'type': segment_type
-        })
-    
-    if _debug_logging():
-        xbmc.log('[TheIntroDB] Returning {} processed {} segments'.format(len(result_segments), segment_type), xbmc.LOGINFO)
-    return result_segments
+        if _debug_logging():
+            xbmc.log('[TheIntroDB] {} candidate: start={} end={} sources={} score={:.3f}'.format(
+                segment_type, result[-1]['start'], result[-1]['end'], sorted(cl['sources']), score), xbmc.LOGINFO)
+
+    result.sort(key=lambda x: x['score'], reverse=True)
+    return result
 
 
 def _normalize_imdb(imdb_id: Optional[str]) -> Optional[str]:
@@ -373,31 +413,48 @@ def _resolve_imdb_from_tmdb(tmdb_id: Union[str, int]) -> Optional[str]:
 
 
 def _request_media(tmdb_id: Optional[Union[str, int]], imdb_id: Optional[str], season: Optional[Union[str, int]], episode: Optional[Union[str, int]], is_movie: bool, duration_ms: Optional[Union[str, int]], want_types: Tuple[str, ...]) -> Optional[Dict[str, Any]]:
-    """Fetch segment data for a title.
+    """Fetch segment data, merging BOTH crowd-sourced databases.
 
-    Queries TheIntroDB first; if it has none of ``want_types``, falls back to
-    IntroDB.app (TV episodes by IMDb id). When Kodi exposed no IMDb id, the
-    show's IMDb id is resolved from its TMDb id so the fallback can still run.
-    Returns whatever data has the wanted segments, else any valid-but-empty
-    response, else None."""
-    data = _query_primary(tmdb_id, imdb_id, season, episode, is_movie, duration_ms)
-    if data and any(data.get(t) for t in want_types):
-        return data
+    Neither TheIntroDB nor IntroDB.app is authoritative (both are user-submitted),
+    so we query both and combine their candidates per type — tagged with 'source'
+    — rather than letting one short-circuit the other. IntroDB.app is TV-only and
+    keyed by IMDb id, so movies use only TheIntroDB; when Kodi exposed no IMDb id
+    we resolve the show's from its TMDb id so the fallback can still run.
+    Plausibility and consensus selection happen in _pick_best_segments_all_types.
+    Returns the merged {type: [candidate, ...]} or None."""
+    primary = _query_primary(tmdb_id, imdb_id, season, episode, is_movie, duration_ms)
 
-    # IntroDB.app is IMDb-only. If we have no IMDb id but do have a TMDb id for a
-    # TV episode, resolve the show's IMDb id from TMDb before trying the fallback.
-    fb_imdb = imdb_id
-    if not is_movie and not _normalize_imdb(fb_imdb) and tmdb_id and _valid_tmdb(tmdb_id):
-        s, e = _episode_nums(season, episode)
-        if s is not None and e is not None and s > 0 and e > 0:
-            fb_imdb = _resolve_imdb_from_tmdb(tmdb_id)
+    fallback = None
+    if not is_movie:
+        fb_imdb = imdb_id
+        if not _normalize_imdb(fb_imdb) and tmdb_id and _valid_tmdb(tmdb_id):
+            s, e = _episode_nums(season, episode)
+            if s is not None and e is not None and s > 0 and e > 0:
+                fb_imdb = _resolve_imdb_from_tmdb(tmdb_id)
+        fallback = _query_fallback(fb_imdb, season, episode, is_movie)
 
-    fallback = _query_fallback(fb_imdb, season, episode, is_movie)
-    if fallback and any(fallback.get(t) for t in want_types):
-        xbmc.log('[TheIntroDB] Using IntroDB.app fallback data', xbmc.LOGINFO)
-        return fallback
+    return _merge_sources(primary, fallback, want_types)
 
-    return data or fallback
+
+def _merge_sources(primary: Optional[Dict[str, Any]], fallback: Optional[Dict[str, Any]],
+                   want_types: Tuple[str, ...]) -> Optional[Dict[str, Any]]:
+    """Combine candidates from both databases per type, tagging each with its source."""
+    merged = {}  # type: Dict[str, List[Dict[str, Any]]]
+    for source_name, src in (('theintrodb', primary), ('introdb.app', fallback)):
+        if not isinstance(src, dict):
+            continue
+        for seg_type in want_types:
+            for seg in (src.get(seg_type) or []):
+                if not isinstance(seg, dict):
+                    continue
+                tagged = dict(seg)
+                tagged['source'] = source_name
+                merged.setdefault(seg_type, []).append(tagged)
+    if merged and _debug_logging():
+        for seg_type, segs in merged.items():
+            xbmc.log('[TheIntroDB] Merged {}: {} candidate(s) from {}'.format(
+                seg_type, len(segs), [s.get('source') for s in segs]), xbmc.LOGINFO)
+    return merged or None
 
 
 def query_intro(tmdb_id=None, imdb_id=None, season=None, episode=None, is_movie=False, duration_ms: Optional[Union[str, int]] = None):
@@ -577,7 +634,7 @@ def query_all_segments(tmdb_id: Optional[Union[str, int]] = None, imdb_id: Optio
         raw_segments = data.get(seg_type, [])
         if _debug_logging():
             xbmc.log('[TheIntroDB] Processing {}: {} raw segments'.format(seg_type, len(raw_segments)), xbmc.LOGINFO)
-        segments = _pick_best_segments_all_types(raw_segments, seg_type)
+        segments = _pick_best_segments_all_types(raw_segments, seg_type, duration_ms)
         if segments:
             all_segments[seg_type] = segments
             if _debug_logging():
