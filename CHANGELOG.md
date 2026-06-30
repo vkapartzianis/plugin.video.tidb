@@ -4,6 +4,28 @@ All notable changes to the **TheIntroDB Kine** add-on are documented here. This
 project loosely follows [Keep a Changelog](https://keepachangelog.com) and
 [Semantic Versioning](https://semver.org).
 
+## [3.0.0] - 2026-06-30
+
+### Changed
+- **Segment matching now merges both databases.** Lookups query TheIntroDB *and*
+  IntroDB.app and combine the results per type instead of trusting whichever
+  responds first — neither is authoritative (both are user-submitted). Movies use
+  TheIntroDB only (IntroDB.app is TV/IMDb-only).
+- **Plausibility filter.** Candidates positioned implausibly for their type are
+  rejected using the file duration — an `intro`/`recap` starting past 65% of
+  runtime, or `credits`/`preview` ending before 50%. This discards mis-tagged
+  entries (e.g. an "intro" sitting at the very end of the file) regardless of
+  source.
+- **Consensus.** When both databases agree on an overlapping window, the
+  candidates are merged and the result is scored higher.
+
+### Fixed
+- Setting reads are now centralized in a shared, `onSettingsChanged`-invalidated
+  cache (`tidb_settings`), so live toggles — including debug logging in the
+  lookup module — apply consistently across the add-on.
+- Guarded the request rate-limit globals with a lock (backported from upstream
+  TheIntroDB/kodi-addon) now that lookups can issue more requests.
+
 ## [2.1.0] - 2026-06-29
 
 ### Added
